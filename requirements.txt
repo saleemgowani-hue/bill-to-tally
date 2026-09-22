@@ -1,25 +1,15 @@
-# ---- core (required) -------------------------------------------------
+# ---- Core ----
 streamlit>=1.50,<2
 SQLAlchemy>=2.0,<3
 pandas>=2.0
-openpyxl>=3.1              # Excel export, and the licence-key register
 Pillow>=10.0
 requests>=2.31
-cryptography>=42.0          # encrypts stored API keys
+cryptography>=42.0
 
-# ---- recommended -----------------------------------------------------
-rapidfuzz>=3.6              # much better product-name matching
-pymupdf>=1.24               # renders PDF invoices to page images
-opencv-python-headless>=4.9 # perspective correction, deskew, denoise
-numpy>=1.24                # imported directly alongside cv2, not just transitively
+# ---- Product matching / Invoice processing ----
+rapidfuzz>=3.6
+pymupdf>=1.24
+opencv-python-headless>=4.9
 
-# ---- optional: offline OCR engines -----------------------------------
-# pytesseract>=0.3.10       # also needs the Tesseract binary installed
-# paddleocr>=2.7            # also needs paddlepaddle
-# pyzbar>=0.1.9             # barcode reading (needs the zbar shared library)
-
-# ---- production database ---------------------------------------------
-# psycopg2-binary>=2.9      # only needed when DATABASE_URL points at PostgreSQL
-
-# ---- development -----------------------------------------------------
-pytest>=8.0
+# ---- PostgreSQL Database ----
+psycopg2-binary>=2.9
