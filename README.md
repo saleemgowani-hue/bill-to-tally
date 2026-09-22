@@ -32,7 +32,7 @@ starts in seconds.
 
 | File | What it does |
 |---|---|
-| **START.bat** | Set up if needed, then run. **This is the one to double-click.** |
+| **START.bat** | Set up if needed, then run. Checks packages on every launch and installs anything missing. **This is the one to double-click.** |
 | **INSTALL.bat** | Set up only, and verify with the test suite. For preparing a PC in advance. |
 | **RUN.bat** | Start the app (already installed). |
 | **RUN_ON_NETWORK.bat** | Start it so other PCs on the shop LAN can use it. Shows the address to give staff. |
@@ -55,15 +55,19 @@ streamlit run app.py
 
 ### Demo seeder options
 
-The demo company ships with 5 products carrying opening stock, because
-product matching cannot be demonstrated against an empty master and stock
-figures need something to move from. If you would rather start clean:
+The demo company ships with 7 products carrying opening stock and one
+supplier, because product matching cannot be demonstrated against an empty
+master and stock figures need something to move from. They are labelled
+**Sample** in the app so nobody mistakes them for something they uploaded, and
+**Settings → 🧪 Demo → Remove sample data** clears them. If you would rather
+start clean:
 
 ```bash
-python seed_demo.py --empty         # same 5 products, stock 0
+python seed_demo.py --empty         # same 7 products, stock 0
 python seed_demo.py --no-products   # no products at all
+python seed_demo.py --no-suppliers  # no sample supplier either
 python seed_demo.py --reset         # delete the demo company and rebuild it
-python seed_demo.py --no-wipe       # keep entered data (no 60-minute sweep)
+python seed_demo.py --no-wipe       # keep entered data, no demo flag
 ```
 
 Flags combine: `python seed_demo.py --reset --empty` rebuilds the demo with
@@ -119,6 +123,12 @@ A bill can also land in **DUPLICATE**, **FAILED** or **CANCELLED**. Stock moves
 **only** after Tally accepts the voucher, and only once — re-posting the same
 bill is blocked by an idempotency key.
 
+Reports and supplier totals count a bill once it is **POSTED**, or **EXPORTED**
+on the XML route where the voucher file has been written and is waiting to be
+imported. A bill at any earlier status is named on the report with the button
+that moves it on, so "I entered a bill and the report is empty" always has an
+answer on the screen.
+
 ---
 
 ## Licensing
@@ -141,6 +151,14 @@ licence expires the app is replaced by a renewal screen — **no data is deleted
 or hidden**, and entering a new key there restores everything at once. A licence
 can also be renewed any time from **Settings → Licence**. Renewing early extends
 from the current expiry, so no paid days are lost.
+
+**Before anything else**, the installation needs a licence signing secret in
+`.env`. `START.bat` generates one on a fresh install; on Linux/macOS run
+`python setup_secret.py`. Until it is set, the app shows a *Setup needed*
+screen rather than accepting any key. Read
+**[docs/VENDOR_SETUP.md](docs/VENDOR_SETUP.md)** before issuing keys — the
+machine that issues keys and the machine that uses them must share the same
+secret.
 
 To mint keys (vendor only):
 
@@ -166,8 +184,8 @@ in **[docs/LICENSING.md](docs/LICENSING.md)**.
 | **Suppliers** | Supplier master with Tally ledger names and purchase totals |
 | **Tally Connection** | Connector setup, ledger mapping, fetch live masters, test connection |
 | **Purchase History** | Filterable history, per-bill detail, exact XML sent, full audit trail |
-| **Reports** | Purchase summary, GST summary, stock valuation, audit log, error log |
-| **Settings** | AI provider + API key, thresholds, company details, users and roles, licence status and renewal |
+| **Reports** | Excel export (by date, supplier or chosen bills), purchase summary, GST summary, stock valuation, audit log, error log |
+| **Settings** | AI provider + API key, thresholds, company details, users and roles, licence status and renewal, app version and what is in this build |
 
 ---
 
@@ -210,11 +228,14 @@ The short version:
    them in Tally. In test mode the XML is generated and shown but nothing is
    sent.
 
-Three connector modes are available:
+Four connector modes are available:
 
 - **Mock** — no Tally at all. Every result is labelled `MOCK`.
 - **Tally XML (HTTP)** — the real integration, over Tally's XML gateway. Stock
   moves as soon as Tally accepts the voucher.
+- **No Tally — Excel** — for customers who do not run Tally. Each posted bill
+  is written to a workbook and stock is kept by this app, which is the book of
+  record here, so stock moves immediately. Nothing to import anywhere.
 - **File export** — writes a `.xml` file you import via *Import → Vouchers*.
   Use this when Tally is on a machine this app cannot reach. The bill waits in
   **Exported** and **stock does not move** until you confirm the import, because
@@ -245,6 +266,11 @@ work with the mock OCR provider, so you can demo with no API key:
 
 A demo script is in **[docs/DEMO_GUIDE.md](docs/DEMO_GUIDE.md)**.
 
+Between customers, clear the demo with **Settings → 🧪 Demo → Clear demo data**.
+Bills go, the seeded products return to their opening stock, and the next
+prospect sees a fresh install. Real customer accounts have no such button and
+their data is permanent.
+
 The older single bill is still there as `samples/sample_purchase_bill.png`.
 
 1. Sign in and go to **Upload Bill**.
@@ -261,7 +287,7 @@ The older single bill is still there as `samples/sample_purchase_bill.png`.
 Run the automated suite:
 
 ```bash
-python -m pytest tests/ -q      # 227 tests
+python -m pytest tests/ -q      # 346 tests
 python tests/smoke_pages.py     # renders all 9 screens headlessly
 python tests/smoke_licence.py   # checks the licence gate and expiry block
 ```
@@ -274,6 +300,9 @@ python tests/smoke_licence.py   # checks the licence gate and expiry block
 BillToTallyAgent/
 ├── app.py                   # entry point, auth, sidebar router
 ├── seed_demo.py             # demo company + sample products
+├── setup_secret.py          # one-time licence signing secret setup
+├── check_deps.py            # what START.bat uses to self-heal a missing package
+├── make_customer_build.py   # VENDOR: build a ready-to-ship customer package
 ├── generate_keys.py         # VENDOR: mint licence keys into an Excel register
 ├── demo_end_to_end.py       # runs the whole pipeline in the terminal
 ├── app_pages/               # one module per screen
@@ -285,7 +314,8 @@ BillToTallyAgent/
 │   ├── tally_connector.py   # XML build + HTTP gateway + mock + file export
 │   ├── purchase_service.py  # orchestration, confirm, post, stock, idempotency
 │   ├── license_service.py   # key generation, offline validation, activation
-│   ├── demo_service.py      # 60-minute wipe for demo companies
+│   ├── demo_service.py      # clearing a demo between prospects
+│   ├── excel_export.py      # workbooks for customers without Tally
 │   └── audit_service.py
 ├── database/                # SQLAlchemy models + session/tenant helpers
 ├── utils/                   # config, security, image tools, logging, UI helpers
