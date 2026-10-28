@@ -72,7 +72,7 @@ def _i(name: str, default: int) -> int:
 # Public demo deployment (e.g. Streamlit Cloud). Switched on by DEMO_MODE=true
 # or by a file named DEMO_MODE.flag next to app.py - the flag file exists only
 # in the demo GitHub repo, never in the vendor source or a customer build.
-DEMO_MODE = _b("DEMO_MODE", False) or (BASE_DIR / "DEMO_MODE.flag").exists()
+DEMO_MODE = _b("DEMO_MODE", (BASE_DIR / "DEMO_MODE.flag").exists())  # explicit env value wins
 
 
 class Settings:

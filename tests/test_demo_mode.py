@@ -18,7 +18,7 @@ def _run(code: str, tmp_path, **env):
 
 def test_demo_mode_off_by_default(tmp_path):
     out = _run("from utils.config import settings; print(settings.DEMO_MODE, settings.LICENSE_REQUIRED)",
-               tmp_path, LICENSE_SIGNING_SECRET="x" * 32)
+               tmp_path, DEMO_MODE="false", LICENSE_SIGNING_SECRET="x" * 32)
     assert out.stdout.split() == ["False", "True"], out.stderr
 
 

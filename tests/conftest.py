@@ -15,6 +15,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TMP}/test.db"
 os.environ["DATA_DIR"] = _TMP
 os.environ["TALLY_TEST_MODE"] = "true"
 os.environ["OCR_PROVIDER"] = "mock"
+os.environ["DEMO_MODE"] = "false"   # the demo repo ships a DEMO_MODE.flag
 os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["LICENSE_SIGNING_SECRET"] = "test-licence-signing-secret-value"
 
