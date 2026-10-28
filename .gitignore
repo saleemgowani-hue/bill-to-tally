@@ -6,3 +6,6 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+dist/
+SN_Softech_Licence_Keys.xlsx
+keys_issued_log.csv

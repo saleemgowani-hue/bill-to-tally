@@ -1,15 +1,46 @@
-# ---- Core ----
+# ---- core (required) -------------------------------------------------
 streamlit>=1.50,<2
 SQLAlchemy>=2.0,<3
 pandas>=2.0
+openpyxl>=3.1              # Excel export, and the licence-key register
 Pillow>=10.0
 requests>=2.31
-cryptography>=42.0
+cryptography>=42.0          # encrypts stored API keys
 
-# ---- Product matching / Invoice processing ----
-rapidfuzz>=3.6
-pymupdf>=1.24
-opencv-python-headless>=4.9
+# ---- recommended -----------------------------------------------------
+rapidfuzz>=3.6              # much better product-name matching
+pymupdf>=1.24               # renders PDF invoices to page images
+opencv-python-headless>=4.9 # perspective correction, deskew, denoise
+numpy>=1.24                # imported directly alongside cv2, not just transitively
 
-# ---- PostgreSQL Database ----
-psycopg2-binary>=2.9
+# ---- offline OCR (default engine + ready fallback) ---------------------
+rapidocr>=3.0                # default engine - fast (ONNXRuntime, no
+                              # PaddlePaddle), models bundled - no first-run
+                              # download, no separate program to install
+onnxruntime>=1.20            # the engine rapidocr runs on - NOT pulled in
+                              # automatically by rapidocr itself, must be
+                              # declared separately or rapidocr fails with
+                              # "onnxruntime is not installed"
+pytesseract>=0.3.10          # ready fallback engine - also needs the
+                              # Tesseract binary, which INSTALL.bat installs
+                              # automatically (falls back to a manual link
+                              # if that download is blocked)
+
+# ---- optional: other OCR engines ---------------------------------------
+# paddleocr>=2.7            # also needs paddlepaddle
+# paddleocr[doc-parser]     # PP-StructureV3 (table-aware). ALSO needs
+# paddlex[ocr]              # paddlex[ocr] (PaddleX gates the pipeline behind
+#                           # its own extra - paddleocr's extra alone isn't
+#                           # enough) and paddlepaddle==3.2.2 specifically -
+#                           # paddlepaddle 3.3.0/3.3.1 have a CPU oneDNN/PIR
+#                           # bug (NotImplementedError: ConvertPirAttribute2
+#                           # RuntimeAttribute...) that breaks PP-StructureV3;
+#                           # see PaddlePaddle/Paddle#77340. Python 3.8-3.12
+#                           # (not 3.13+) - see INSTALL_OFFLINE_OCR.bat
+# pyzbar>=0.1.9             # barcode reading (needs the zbar shared library)
+
+# ---- production database ---------------------------------------------
+# psycopg2-binary>=2.9      # only needed when DATABASE_URL points at PostgreSQL
+
+# ---- development -----------------------------------------------------
+pytest>=8.0

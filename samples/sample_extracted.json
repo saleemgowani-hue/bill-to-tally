@@ -1,0 +1,75 @@
+{
+  "supplier": {
+    "name": "Shreeji Distributors",
+    "gstin": "23ABCDE1234F1Z5",
+    "address": "12 MG Road, Indore, Madhya Pradesh - 452001"
+  },
+  "invoice": {
+    "invoice_number": "SD/2026/1187",
+    "invoice_date": "2026-09-04",
+    "due_date": "2026-10-04"
+  },
+  "items": [
+    {
+      "raw_name": "Parle G Gold 800G",
+      "normalized_name": "Parle G Gold 800 G",
+      "hsn": "19053100",
+      "barcode": "8901719101234",
+      "quantity": 24,
+      "unit": "PCS",
+      "rate": 95.0,
+      "discount": 0.0,
+      "taxable_value": 2280.0,
+      "gst_rate": 18.0,
+      "cgst": 205.2,
+      "sgst": 205.2,
+      "igst": 0.0,
+      "cess": 0.0,
+      "total": 2690.4,
+      "confidence": 0.96
+    },
+    {
+      "raw_name": "Tata Salt 1KG",
+      "normalized_name": "Tata Salt 1 KG",
+      "hsn": "25010020",
+      "barcode": "",
+      "quantity": 50,
+      "unit": "PCS",
+      "rate": 22.0,
+      "discount": 50.0,
+      "taxable_value": 1050.0,
+      "gst_rate": 5.0,
+      "cgst": 26.25,
+      "sgst": 26.25,
+      "igst": 0.0,
+      "cess": 0.0,
+      "total": 1102.5,
+      "confidence": 0.93
+    },
+    {
+      "raw_name": "Amul Butter 500 gm",
+      "normalized_name": "Amul Butter 500 GM",
+      "hsn": "04051000",
+      "barcode": "",
+      "quantity": 12,
+      "unit": "PCS",
+      "rate": 265.0,
+      "discount": 0.0,
+      "taxable_value": 3180.0,
+      "gst_rate": 12.0,
+      "cgst": 190.8,
+      "sgst": 190.8,
+      "igst": 0.0,
+      "cess": 0.0,
+      "total": 3561.6,
+      "confidence": 0.64
+    }
+  ],
+  "subtotal": 6510.0,
+  "discount_total": 50.0,
+  "tax_total": 844.5,
+  "cess_total": 0.0,
+  "round_off": 0.0,
+  "grand_total": 7354.5,
+  "overall_confidence": 0.86
+}

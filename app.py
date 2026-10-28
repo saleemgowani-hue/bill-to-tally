@@ -265,7 +265,11 @@ def auth_screen(db) -> None:
 PAGES = {
     "Dashboard":        ("📊", "dashboard",        "#1570ef"),
     "Upload Bill":      ("📤", "upload_bill",      "#039855"),
+    "Import Excel":     ("📊", "upload_excel",     "#0ba5ec"),
+    "Manifest to Excel": ("🚚", "manifest_to_excel", "#d92d20"),
     "Review Bills":     ("🔍", "review_bills",     "#dc6803"),
+    "Sales":            ("💰", "sales",            "#12b76a"),
+    "Bank":             ("🏦", "bank",             "#7a5af8"),
     "Products":         ("📦", "products",         "#6941c6"),
     "Suppliers":        ("🏭", "suppliers",        "#0e7090"),
     "Tally Connection": ("🔗", "tally",            "#c11574"),

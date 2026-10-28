@@ -1,0 +1,362 @@
+[
+  {
+    "file": "demo_bill_1_balaji.png",
+    "fingerprint": "56007e04c160c07094b086888688868920660044016400668800a040003c0010",
+    "note": "Clean bill \u2014 everything should match your product master.",
+    "data": {
+      "supplier": {
+        "name": "Shree Balaji Traders",
+        "gstin": "22ABCDE1234F1Z5",
+        "address": "142 Malviya Road, Raipur, Chhattisgarh - 492001",
+        "phone": "0771-2234567"
+      },
+      "invoice": {
+        "invoice_number": "SBT/2026/0412",
+        "invoice_date": "2026-09-01",
+        "due_date": "2026-10-01"
+      },
+      "items": [
+        {
+          "raw_name": "Parle-G Gold Biscuit 800 gm",
+          "normalized_name": "Parle-G Gold Biscuit 800 gm",
+          "hsn": "19053100",
+          "barcode": "8901719101234",
+          "quantity": 24.0,
+          "unit": "PCS",
+          "rate": 95.0,
+          "discount": 0.0,
+          "taxable_value": 2280.0,
+          "gst_rate": 18.0,
+          "cgst": 205.2,
+          "sgst": 205.2,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 2690.4,
+          "confidence": 0.97
+        },
+        {
+          "raw_name": "Tata Salt 1 kg",
+          "normalized_name": "Tata Salt 1 kg",
+          "hsn": "25010020",
+          "barcode": "",
+          "quantity": 50.0,
+          "unit": "PCS",
+          "rate": 22.0,
+          "discount": 0.0,
+          "taxable_value": 1100.0,
+          "gst_rate": 5.0,
+          "cgst": 27.5,
+          "sgst": 27.5,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 1155.0,
+          "confidence": 0.96
+        },
+        {
+          "raw_name": "Fortune Sunflower Oil 1 L",
+          "normalized_name": "Fortune Sunflower Oil 1 L",
+          "hsn": "15121110",
+          "barcode": "",
+          "quantity": 20.0,
+          "unit": "LTR",
+          "rate": 145.0,
+          "discount": 0.0,
+          "taxable_value": 2900.0,
+          "gst_rate": 5.0,
+          "cgst": 72.5,
+          "sgst": 72.5,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 3045.0,
+          "confidence": 0.95
+        }
+      ],
+      "subtotal": 6280.0,
+      "discount_total": 0.0,
+      "tax_total": 610.4,
+      "cess_total": 0.0,
+      "round_off": 0.0,
+      "grand_total": 6890.4,
+      "overall_confidence": 0.95
+    }
+  },
+  {
+    "file": "demo_bill_2_sharda.png",
+    "fingerprint": "17186e64c06095f086a8c6a886898eec006481440166907282008000a03c003c",
+    "note": "Has a line discount and a round-off \u2014 shows the arithmetic checks.",
+    "data": {
+      "supplier": {
+        "name": "Maa Sharda Agencies",
+        "gstin": "22FGHIJ5678K1Z9",
+        "address": "Shop 7, Supela Market, Bhilai, Chhattisgarh - 490023",
+        "phone": "0788-2456789"
+      },
+      "invoice": {
+        "invoice_number": "MSA/26-27/0138",
+        "invoice_date": "2026-09-01",
+        "due_date": "2026-09-30"
+      },
+      "items": [
+        {
+          "raw_name": "Amul Butter 500 gm",
+          "normalized_name": "Amul Butter 500 gm",
+          "hsn": "04051000",
+          "barcode": "",
+          "quantity": 12.0,
+          "unit": "PCS",
+          "rate": 265.0,
+          "discount": 180.0,
+          "taxable_value": 3000.0,
+          "gst_rate": 12.0,
+          "cgst": 180.0,
+          "sgst": 180.0,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 3360.0,
+          "confidence": 0.94
+        },
+        {
+          "raw_name": "Britannia Marie Gold 250 gm",
+          "normalized_name": "Britannia Marie Gold 250 gm",
+          "hsn": "19053100",
+          "barcode": "",
+          "quantity": 40.0,
+          "unit": "PCS",
+          "rate": 30.0,
+          "discount": 0.0,
+          "taxable_value": 1200.0,
+          "gst_rate": 18.0,
+          "cgst": 108.0,
+          "sgst": 108.0,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 1416.0,
+          "confidence": 0.96
+        },
+        {
+          "raw_name": "Colgate Strong Teeth 100 gm",
+          "normalized_name": "Colgate Strong Teeth 100 gm",
+          "hsn": "33061020",
+          "barcode": "",
+          "quantity": 36.0,
+          "unit": "PCS",
+          "rate": 52.0,
+          "discount": 0.0,
+          "taxable_value": 1872.0,
+          "gst_rate": 18.0,
+          "cgst": 168.48,
+          "sgst": 168.48,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 2208.96,
+          "confidence": 0.93
+        },
+        {
+          "raw_name": "Surf Excel Bar 250 gm",
+          "normalized_name": "Surf Excel Bar 250 gm",
+          "hsn": "34011190",
+          "barcode": "",
+          "quantity": 48.0,
+          "unit": "PCS",
+          "rate": 22.0,
+          "discount": 0.0,
+          "taxable_value": 1056.0,
+          "gst_rate": 18.0,
+          "cgst": 95.04,
+          "sgst": 95.04,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 1246.08,
+          "confidence": 0.95
+        }
+      ],
+      "subtotal": 7128.0,
+      "discount_total": 180.0,
+      "tax_total": 1103.04,
+      "cess_total": 0.0,
+      "round_off": -0.04,
+      "grand_total": 8231.0,
+      "overall_confidence": 0.93
+    }
+  },
+  {
+    "file": "demo_bill_3_nagpur.png",
+    "fingerprint": "4ba05b98c02081600070969886888689826400640164016680009042003c0010",
+    "note": "Out-of-state supplier \u2014 IGST instead of CGST/SGST.",
+    "data": {
+      "supplier": {
+        "name": "Nagpur Trading Company",
+        "gstin": "27LMNOP9012Q1Z3",
+        "address": "88 Itwari Bazaar, Nagpur, Maharashtra - 440002",
+        "phone": "0712-2567890"
+      },
+      "invoice": {
+        "invoice_number": "NTC/2026/2291",
+        "invoice_date": "2026-09-01",
+        "due_date": "2026-10-16"
+      },
+      "items": [
+        {
+          "raw_name": "Surf Excel Easy Wash 1 kg",
+          "normalized_name": "Surf Excel Easy Wash 1 kg",
+          "hsn": "34022010",
+          "barcode": "",
+          "quantity": 24.0,
+          "unit": "PCS",
+          "rate": 118.0,
+          "discount": 0.0,
+          "taxable_value": 2832.0,
+          "gst_rate": 18.0,
+          "cgst": 0.0,
+          "sgst": 0.0,
+          "igst": 509.76,
+          "cess": 0.0,
+          "total": 3341.76,
+          "confidence": 0.95
+        },
+        {
+          "raw_name": "Lifebuoy Total Soap 125 gm",
+          "normalized_name": "Lifebuoy Total Soap 125 gm",
+          "hsn": "34011110",
+          "barcode": "",
+          "quantity": 100.0,
+          "unit": "PCS",
+          "rate": 32.0,
+          "discount": 0.0,
+          "taxable_value": 3200.0,
+          "gst_rate": 18.0,
+          "cgst": 0.0,
+          "sgst": 0.0,
+          "igst": 576.0,
+          "cess": 0.0,
+          "total": 3776.0,
+          "confidence": 0.94
+        }
+      ],
+      "subtotal": 6032.0,
+      "discount_total": 0.0,
+      "tax_total": 1085.76,
+      "cess_total": 0.0,
+      "round_off": 0.24,
+      "grand_total": 7118.0,
+      "overall_confidence": 0.94
+    }
+  },
+  {
+    "file": "demo_bill_4_gupta.png",
+    "fingerprint": "ac11a0a7c3604070969886888e8886c8868904660044016400668000003c003c",
+    "note": "One line read poorly \u2014 demonstrates the mandatory review.",
+    "data": {
+      "supplier": {
+        "name": "Gupta Kirana Bhandar",
+        "gstin": "22RSTUV3456W1Z7",
+        "address": "Gudhiyari Road, Raipur, Chhattisgarh - 492009",
+        "phone": "94255-11223"
+      },
+      "invoice": {
+        "invoice_number": "GKB/0977",
+        "invoice_date": "2026-09-01",
+        "due_date": ""
+      },
+      "items": [
+        {
+          "raw_name": "Tata Salt 1 kg",
+          "normalized_name": "Tata Salt 1 kg",
+          "hsn": "25010020",
+          "barcode": "",
+          "quantity": 30.0,
+          "unit": "PCS",
+          "rate": 22.0,
+          "discount": 0.0,
+          "taxable_value": 660.0,
+          "gst_rate": 5.0,
+          "cgst": 16.5,
+          "sgst": 16.5,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 693.0,
+          "confidence": 0.96
+        },
+        {
+          "raw_name": "Aashirvaad Atta 5 kg",
+          "normalized_name": "Aashirvaad Atta 5 kg",
+          "hsn": "11010000",
+          "barcode": "",
+          "quantity": 20.0,
+          "unit": "PCS",
+          "rate": 255.0,
+          "discount": 0.0,
+          "taxable_value": 5100.0,
+          "gst_rate": 5.0,
+          "cgst": 127.5,
+          "sgst": 127.5,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 5355.0,
+          "confidence": 0.58
+        },
+        {
+          "raw_name": "Maggi Noodles 70 gm",
+          "normalized_name": "Maggi Noodles 70 gm",
+          "hsn": "19023010",
+          "barcode": "",
+          "quantity": 96.0,
+          "unit": "PCS",
+          "rate": 14.0,
+          "discount": 0.0,
+          "taxable_value": 1344.0,
+          "gst_rate": 18.0,
+          "cgst": 120.96,
+          "sgst": 120.96,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 1585.92,
+          "confidence": 0.92
+        },
+        {
+          "raw_name": "Sunfeast Dark Fantasy 300 gm",
+          "normalized_name": "Sunfeast Dark Fantasy 300 gm",
+          "hsn": "19053100",
+          "barcode": "",
+          "quantity": 24.0,
+          "unit": "PCS",
+          "rate": 110.0,
+          "discount": 0.0,
+          "taxable_value": 2640.0,
+          "gst_rate": 18.0,
+          "cgst": 237.6,
+          "sgst": 237.6,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 3115.2,
+          "confidence": 0.91
+        },
+        {
+          "raw_name": "Red Label Tea 500 gm",
+          "normalized_name": "Red Label Tea 500 gm",
+          "hsn": "09024010",
+          "barcode": "",
+          "quantity": 16.0,
+          "unit": "PCS",
+          "rate": 265.0,
+          "discount": 0.0,
+          "taxable_value": 4240.0,
+          "gst_rate": 5.0,
+          "cgst": 106.0,
+          "sgst": 106.0,
+          "igst": 0.0,
+          "cess": 0.0,
+          "total": 4452.0,
+          "confidence": 0.93
+        }
+      ],
+      "subtotal": 13984.0,
+      "discount_total": 0.0,
+      "tax_total": 1217.12,
+      "cess_total": 0.0,
+      "round_off": -0.12,
+      "grand_total": 15201.0,
+      "overall_confidence": 0.58
+    }
+  }
+]
