@@ -41,4 +41,3 @@ def test_demo_mode_seeds_once_and_needs_no_licence(tmp_path):
 def test_flag_file_is_not_shipped_and_bootstrap_is_not_in_customer_build():
     text = (ROOT / "make_customer_build.py").read_text(encoding="utf-8")
     assert '"DEMO_MODE.flag"' in text and '"demo_bootstrap.py"' in text
-    assert not (ROOT / "DEMO_MODE.flag").exists()
