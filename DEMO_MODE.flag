@@ -1,0 +1,2 @@
+This file switches the app into public DEMO mode (see utils/config.py).
+Delete it to run the app normally.

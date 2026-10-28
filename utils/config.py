@@ -69,6 +69,12 @@ def _i(name: str, default: int) -> int:
         return default
 
 
+# Public demo deployment (e.g. Streamlit Cloud). Switched on by DEMO_MODE=true
+# or by a file named DEMO_MODE.flag next to app.py - the flag file exists only
+# in the demo GitHub repo, never in the vendor source or a customer build.
+DEMO_MODE = _b("DEMO_MODE", False) or (BASE_DIR / "DEMO_MODE.flag").exists()
+
+
 class Settings:
     """Application settings snapshot."""
 
@@ -81,10 +87,13 @@ class Settings:
     # Bump both on every build you send out. They are shown in the sidebar and
     # in Settings → System so that "the new option is missing" can be answered
     # by looking, instead of by guessing whether the update was extracted.
-    APP_VERSION = "1.3.3"
-    BUILD_DATE = "2026-10-09"
+    APP_VERSION = "1.3.4"
+    BUILD_DATE = "2026-10-28"
     # One line per release, newest first, shown in Settings → System.
     CHANGELOG = [
+        ("1.3.4", "Demo mode for public showcase deployments: sets up the demo "
+                  "company by itself, one-click demo sign-in, no sign-up, "
+                  "no licence needed"),
         ("1.3.3", "CREATE_DESKTOP_SHORTCUT.bat: one double-click puts an "
                   "app icon on the Desktop"),
         ("1.3.2", "Manifest to Excel: dates are shown as DD/MM/YYYY (real "
@@ -116,16 +125,21 @@ class Settings:
     # No default on purpose. A secret baked into the source is no secret: anyone
     # holding the code could mint unlimited valid keys. It must come from .env,
     # and the app refuses to validate licences until it does.
-    LICENSE_SIGNING_SECRET = os.getenv("LICENSE_SIGNING_SECRET", "").strip()
+    # Demo mode only: a public placeholder so the seeded demo can run. It signs
+    # nothing of value - real keys are made with your own secret in .env.
+    LICENSE_SIGNING_SECRET = os.getenv("LICENSE_SIGNING_SECRET", "").strip() or (
+        "demo-mode-public-placeholder-secret" if DEMO_MODE else ""
+    )
     LICENSE_SECRET_MIN_LENGTH = 16
     LICENSE_WARN_DAYS = _i("LICENSE_WARN_DAYS", 10)
-    LICENSE_REQUIRED = _b("LICENSE_REQUIRED", True)
+    LICENSE_REQUIRED = False if DEMO_MODE else _b("LICENSE_REQUIRED", True)
+    DEMO_MODE = DEMO_MODE
 
     # ---- demo accounts ----
     # 0 = never clear on a timer. Clearing a demo is a deliberate act between
     # prospects; a countdown that empties the screen mid-presentation is worse
     # than no housekeeping at all. Set a value only for an unattended demo.
-    DEMO_RETENTION_MINUTES = _i("DEMO_RETENTION_MINUTES", 0)
+    DEMO_RETENTION_MINUTES = _i("DEMO_RETENTION_MINUTES", 60 if DEMO_MODE else 0)
     DEMO_SWEEP_INTERVAL_SECONDS = _i("DEMO_SWEEP_INTERVAL_SECONDS", 120)
 
 

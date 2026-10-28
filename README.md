@@ -1,3 +1,9 @@
+> **This GitHub repo is the public DEMO build.** `DEMO_MODE.flag` makes the app
+> prepare its own demo company and sign visitors in with one click (no sign-up,
+> no licence key, mock OCR, mock Tally). Deploy it on Streamlit Cloud with
+> `app.py` as the main file - no secrets needed. Real customers get the
+> separate customer zip, never this repo.
+
 # AI Bill-to-Tally Stock Update Agent
 
 **SN Softech Solutions** — *Smart Software Solutions for Growing Businesses*

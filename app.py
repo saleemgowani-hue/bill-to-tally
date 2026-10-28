@@ -241,10 +241,41 @@ def forgot_password_tab(db) -> None:
         st.success("Password updated. You can sign in now.")
 
 
+def demo_sign_in_panel(db) -> None:
+    """Public demo: one click in, no sign-up or licence key needed."""
+    from services import demo_bootstrap
+
+    email, password = demo_bootstrap.credentials()
+    st.info(
+        "🧪 **Live demo** - sample data only, nothing here is a real company. "
+        "Upload bills, try the Tally mock and Manifest to Excel freely."
+    )
+    user = db.query(User).filter(User.email == email).one_or_none()
+    if user is None:
+        st.error("The demo is still being prepared. Please refresh in a moment.")
+        return
+    if st.button("▶ Open the demo", type="primary", width="stretch", key="demo_open"):
+        user.last_login_at = dt.datetime.now(dt.timezone.utc)
+        db.commit()
+        login_user(user)
+        audit_service.record(db, user.company_id, "USER_LOGIN", f"{user.email} signed in (demo)", user=user)
+        st.rerun()
+    st.caption(f"Or sign in by hand: {email} / {password}")
+
+
 def auth_screen(db) -> None:
     left, mid, right = st.columns([1, 2, 1])
     with mid:
         brand_header("Take a photo of your purchase bill and let AI prepare your Tally entry.")
+        if settings.DEMO_MODE:
+            demo_sign_in_panel(db)
+            with st.expander("Sign in with email"):
+                sign_in_tab(db)
+            st.caption(
+                f"{settings.COMPANY_BRAND} - support {settings.SUPPORT_CONTACT} - "
+                f"v{settings.APP_VERSION} ({settings.BUILD_DATE}) - DEMO"
+            )
+            return
         tab1, tab2, tab3 = st.tabs(["Sign in", "Sign up", "Forgot password"])
         with tab1:
             sign_in_tab(db)
@@ -499,7 +530,17 @@ def setup_required_screen(problem: str) -> None:
         )
 
 
+@st.cache_resource(show_spinner="Preparing the demo...")
+def _prepare_demo() -> bool:
+    from services import demo_bootstrap
+    demo_bootstrap.ensure_demo_company()
+    return True
+
+
 def main() -> None:
+    if settings.DEMO_MODE:
+        # Cached per server process: the first visitor pays for the seeding.
+        _prepare_demo()
     db = session_db()
 
     if settings.LICENSE_REQUIRED:

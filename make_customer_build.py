@@ -47,6 +47,8 @@ EXCLUDE_FILES = {
     # confusing at best, and somewhere real bills could be typed by mistake.
     "RESET_DEMO.bat",
     "demo_end_to_end.py",
+    "demo_bootstrap.py",   # public-demo only; app.py imports it lazily
+    "DEMO_MODE.flag",
     # This is what START.bat/INSTALL.bat call on a fresh install to seed a demo
     # company with a printed password and an auto-activated trial licence,
     # bypassing Sign Up entirely. A customer build swaps it out for
