@@ -78,7 +78,7 @@ DEMO_MODE = _b("DEMO_MODE", (BASE_DIR / "DEMO_MODE.flag").exists())  # explicit 
 class Settings:
     """Application settings snapshot."""
 
-    APP_NAME = os.getenv("APP_NAME", "AI Bill-to-Tally Agent")
+    APP_NAME = os.getenv("APP_NAME", "Universal AI Bill-to-Tally Agent")
     COMPANY_BRAND = os.getenv("COMPANY_BRAND", "SN Softech Solutions")
     BRAND_TAGLINE = os.getenv(
         "BRAND_TAGLINE", "Smart Software Solutions for Growing Businesses"
