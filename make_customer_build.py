@@ -60,6 +60,15 @@ EXCLUDE_FILES = {
     # seed_demo.py is excluded above. INSTALL.bat's post-install `pytest tests`
     # check would otherwise report a false failure to the customer.
     "test_seed.py",
+    # Cross-checks ocr_proxy/license_check.py, which is vendor-only and left
+    # out below — without this exclusion INSTALL.bat's post-install pytest
+    # stops with a collection error on every customer laptop.
+    "test_proxy_license_check.py",
+    # Vendor-side checks: they build a customer zip (needs this script) or
+    # boot the public demo (needs demo_bootstrap.py) — neither exists in a
+    # customer copy, so they can only fail there.
+    "test_customer_build.py",
+    "test_demo_mode.py",
     # Developer-facing; assumes the reader can run seed_demo.py, RESET_DEMO.bat
     # etc. and documents the demo password. READ_ME_FIRST.txt is what a
     # customer gets instead.
@@ -112,7 +121,7 @@ LAUNCHER_PATCHES = {
     ],
 }
 
-READ_ME = """AI BILL-TO-TALLY STOCK UPDATE AGENT
+READ_ME = """UNIVERSAL AI BILL-TO-TALLY AGENT
 {brand} - support {support}
 
 Prepared for: {customer}
@@ -124,7 +133,20 @@ BEFORE YOU START - one thing to install (one-time, free):
      Run the installer and TICK "Add Python to PATH" on the very
      first screen - this is the most common mistake, so don't miss it.
 
-This app reads your bill photos itself, fully offline, with RapidOCR
+HOW BILLS ARE READ
+  * With internet: Google Gemini AI reads any bill from any industry -
+    purchase, sales, expense, debit/credit notes, multi-page PDFs.
+    Open "API Settings" in the app and either use the SN Softech
+    central key (if enabled for you) or paste your own free Gemini key
+    from aistudio.google.com, then press "Check key" and "Save".
+  * Without internet (or without a key): the bill is read offline with
+    RapidOCR automatically. You will see "read with the offline engine -
+    check every line". Gemini itself always needs internet.
+  * Missing ledgers, units and stock items are created in Tally
+    automatically before posting (can be switched off in API Settings).
+
+OFFLINE ENGINE
+This app also reads your bill photos itself, fully offline, with RapidOCR
 (fast, the default) - INSTALL.bat below sets it up automatically, no
 extra download needed. It also sets up Tesseract OCR as a backup engine
 - that does download something (~80 MB, from the official Tesseract
@@ -209,6 +231,10 @@ def build_env(secret: str) -> str:
             text,
             flags=re.M,
         )
+    # Universal AI edition: Gemini is the default engine; when there is no
+    # internet / no key / the monthly limit is reached, every bill is read
+    # with offline RapidOCR instead (see services/gemini_engine.py).
+    text = re.sub(r"^OCR_PROVIDER=.*$", "OCR_PROVIDER=universal", text, flags=re.M)
     header = (
         "# Configured by SN Softech Solutions. Do not edit unless asked to.\n"
         "# Changing LICENSE_SIGNING_SECRET will stop your licence key working.\n\n"

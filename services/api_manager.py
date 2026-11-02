@@ -193,6 +193,17 @@ def universal_config(session: Session, company: Company, user_id: Optional[int] 
         config["licence_key"] = decrypt_secret(
             get_setting(session, company.id, "proxy_api_key", "") or ""
         )
+        if not config["proxy_url"]:
+            config["blocked_reason"] = config["blocked_reason"] or (
+                "No Gemini key is set up yet. Add your own free Gemini key in "
+                "API Settings, or ask SN Softech Solutions to enable the central key."
+            )
+        elif not config["licence_key"]:
+            config["blocked_reason"] = config["blocked_reason"] or (
+                "To use the SN Softech central key, enter your licence key once in "
+                "Settings → AI / OCR (SN Softech Cloud AI), or add your own Gemini "
+                "key in API Settings."
+            )
     return config
 
 
