@@ -269,6 +269,15 @@ def _review_tab(db, company, user) -> None:
 
 
 def _render_invoice(db, company, user, invoice: SalesInvoice) -> None:
+    from services.product_matcher import auto_link_new_lines
+    if invoice.status not in (InvoiceStatus.POSTED.value, InvoiceStatus.CANCELLED.value):
+        linked = auto_link_new_lines(
+            db, company.id,
+            db.query(SalesInvoiceItem).filter(SalesInvoiceItem.invoice_id == invoice.id).all(),
+            user.id, None, "sales",
+        )
+        if linked:
+            st.toast(f"{linked} new product(s) added to Products automatically.")
     items = (
         db.query(SalesInvoiceItem)
         .filter(SalesInvoiceItem.invoice_id == invoice.id)
@@ -592,10 +601,11 @@ def _render_line(db, company, user, invoice, item, position, matcher, product_op
             st.markdown("---")
             new_cols = st.columns([3, 1])
             new_cols[0].caption(
-                "Not in your product master yet. Creating it here adds it to "
-                "Products with zero opening stock."
+                "A similar product already exists — pick it in the list above. Only if "
+                "this really is a different item, add it as a new product. / मिलता-जुलता "
+                "प्रोडक्ट ऊपर से चुनें, अलग आइटम हो तभी नया बनाएं।"
             )
-            if new_cols[1].button("➕ Create product", key=f"screate_{item.id}"):
+            if new_cols[1].button("➕ Different item — add new", key=f"screate_{item.id}"):
                 # rate=0 here on purpose: create_product_from_item stores its
                 # "rate" argument as purchase_rate, which a sale figure must
                 # never populate. The sale rate is set separately just below.

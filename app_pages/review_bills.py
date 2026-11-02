@@ -91,6 +91,15 @@ def render() -> None:
 
 # --------------------------------------------------------------------------
 def _render_invoice(db, company, user, invoice: Invoice) -> None:
+    from services.product_matcher import auto_link_new_lines
+    if invoice.status not in (InvoiceStatus.POSTED.value, InvoiceStatus.CANCELLED.value):
+        linked = auto_link_new_lines(
+            db, company.id,
+            db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice.id).all(),
+            user.id, invoice.supplier_id, "purchase",
+        )
+        if linked:
+            st.toast(f"{linked} new product(s) added to Products automatically.")
     report = revalidate(db, company, invoice)
     items = (
         db.query(InvoiceItem)
@@ -427,10 +436,11 @@ def _render_line(db, company, user, invoice, item, position, matcher, product_op
             st.markdown("---")
             new_cols = st.columns([3, 1])
             new_cols[0].caption(
-                "Not in your product master yet. Creating it here adds it to "
-                "Products with zero opening stock."
+                "A similar product already exists — pick it in the list above. Only if "
+                "this really is a different item, add it as a new product. / मिलता-जुलता "
+                "प्रोडक्ट ऊपर से चुनें, अलग आइटम हो तभी नया बनाएं।"
             )
-            if new_cols[1].button("➕ Create product", key=f"create_{item.id}"):
+            if new_cols[1].button("➕ Different item — add new", key=f"create_{item.id}"):
                 product = matcher.create_product_from_item(
                     {
                         "normalized_name": name, "raw_name": name, "hsn": hsn,

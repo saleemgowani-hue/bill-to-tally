@@ -51,7 +51,7 @@ from services import audit_service
 from services.ai_invoice_parser import InvoiceParser, ParsedInvoice
 from services.customer_service import find_or_create_customer
 from services.invoice_validator import InvoiceValidator, ValidationReport
-from services.product_matcher import ProductMatcher
+from services.product_matcher import ProductMatcher, auto_link_new_lines, resolve_or_create
 from services.tally_connector import TallyConnector, TallyResult, VoucherPayload
 from utils.config import settings
 from utils.image_tools import file_hash, save_image
@@ -219,7 +219,7 @@ def _finalize_sales_invoice(
     # -- product matching ------------------------------------------------
     matcher = ProductMatcher(session, company.id)
     for index, item in enumerate(data.get("items", [])):
-        match = matcher.match(item, customer.id if customer else None)
+        match = resolve_or_create(matcher, item, customer.id if customer else None, getattr(user, "id", None), "sales")
         session.add(
             SalesInvoiceItem(
                 invoice_id=invoice.id,
@@ -516,6 +516,11 @@ def confirm_sales_invoice(
     if invoice.status in (InvoiceStatus.POSTED.value,):
         return False, "This invoice has already been posted."
 
+    auto_link_new_lines(
+        session, company.id,
+        session.query(SalesInvoiceItem).filter(SalesInvoiceItem.invoice_id == invoice.id).all(),
+        user.id, None, "sales",
+    )
     report = revalidate_sales(session, company, invoice)
     pending = unresolved_sales_items(session, invoice.id)
     if pending:

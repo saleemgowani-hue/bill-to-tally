@@ -78,6 +78,12 @@ action, and the bill only sits in review until someone decides.
   *Sundry Creditors*, a customer under *Sundry Debtors*, a ledger typed by hand (Rent,
   Bank Charges, Salary …) under *Indirect Expenses* on a payment and *Indirect Incomes*
   on a receipt. Switch off in **API Settings → Options**.
+* **Products are created automatically:** a bill line with no similar product in Products
+  is added to Products (name, HSN, unit, GST %, rate; zero opening stock) and linked at
+  once — on Purchase, Sales and Excel import, and on bills saved earlier when they are
+  opened or confirmed. The bill wording is remembered, so the next bill links straight
+  away. A line that looks like an existing product is NOT duplicated: it is shown for a
+  person to pick. Switch off in **API Settings → Options**.
 * **Voucher numbers:** Tally Connection → *Voucher numbers* — for each of Purchase, Sales,
   Payment, Receipt, Journal, Contra, Debit Note, Credit Note choose *Tally decides*,
   *My own series* (prefix + start number + digits + suffix, e.g. `PUR/0101/26-27`) or

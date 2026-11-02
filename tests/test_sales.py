@@ -199,3 +199,14 @@ def test_build_sales_voucher_payload_uses_customer_and_sales_ledger(session, com
     assert payload.supplier_ledger == "Retail Mart"
     assert payload.purchase_ledger == "Sales Account"
     assert payload.voucher_type == "Sales"
+
+
+def test_sales_lines_without_a_product_are_created_automatically(session, company, user):
+    from database.models import Product
+
+    results = ingest_sales_excel(session, company, user, "sales2.xlsx", _xlsx_bytes(ROWS))
+    lines = results[0].invoice.items
+    assert lines and all(line.product_id for line in lines)
+    created = session.query(Product).filter(Product.company_id == company.id).all()
+    assert len(created) == len(lines)
+    assert all((p.purchase_rate or 0) == 0 for p in created)  # sale rate not stored as cost

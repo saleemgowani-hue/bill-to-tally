@@ -46,7 +46,7 @@ from services.invoice_validator import (
     ValidationReport,
     check_duplicate,
 )
-from services.product_matcher import ProductMatcher
+from services.product_matcher import ProductMatcher, auto_link_new_lines, resolve_or_create
 from services.tally_connector import TallyConnector, TallyResult, VoucherPayload
 from utils.config import settings
 from utils.image_tools import file_hash, save_image
@@ -161,7 +161,7 @@ def _finalize_invoice(
     # -- product matching ------------------------------------------------
     matcher = ProductMatcher(session, company.id)
     for index, item in enumerate(data.get("items", [])):
-        match = matcher.match(item, supplier.id if supplier else None)
+        match = resolve_or_create(matcher, item, supplier.id if supplier else None, getattr(user, "id", None), "purchase")
         session.add(
             InvoiceItem(
                 invoice_id=invoice.id,
@@ -502,6 +502,11 @@ def confirm_invoice(
     if invoice.status in (InvoiceStatus.POSTED.value,):
         return False, "This invoice has already been posted."
 
+    auto_link_new_lines(
+        session, company.id,
+        session.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice.id).all(),
+        user.id, invoice.supplier_id, "purchase",
+    )
     report = revalidate(session, company, invoice)
     pending = unresolved_items(session, invoice.id)
     if pending:

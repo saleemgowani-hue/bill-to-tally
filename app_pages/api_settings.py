@@ -178,7 +178,16 @@ def _options_tab(db, company, user):
         disabled=not user.is_admin,
         help="Everything created is listed in the audit log.",
     )
+    auto_products = st.toggle(
+        "Add products that are not in Products automatically when a bill is read "
+        "/ नया प्रोडक्ट अपने आप जोड़ें",
+        value=str(get_setting(db, company.id, "auto_create_products", "1")) != "0",
+        disabled=not user.is_admin,
+        help="Only items with no similar product are added. Items that look like an "
+             "existing product are shown for you to pick, so no duplicates are made.",
+    )
     if user.is_admin and st.button("💾 Save options", type="primary"):
+        set_setting(db, company.id, "auto_create_products", "1" if auto_products else "0")
         set_setting(db, company.id, "offline_fallback", new_fallback)
         set_setting(db, company.id, "pages_per_call", str(int(pages)))
         set_setting(db, company.id, "auto_create_masters", "1" if auto_create else "0")

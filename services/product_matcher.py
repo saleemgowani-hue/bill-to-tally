@@ -469,3 +469,79 @@ class ProductMatcher:
         self.refresh()
         log.info("Product created from bill line: %s", product.name)
         return product
+
+
+# --------------------------------------------------------------------------
+# Automatic product creation (no "Create product" click needed)
+# --------------------------------------------------------------------------
+def auto_create_products_enabled(session: Session, company_id: int) -> bool:
+    from database.database import get_setting
+    return str(get_setting(session, company_id, "auto_create_products", "1")) != "0"
+
+
+NEW_STATUSES = (MatchStatus.NEW.value, MatchStatus.NEW_BARCODE.value)
+
+
+def resolve_or_create(
+    matcher: "ProductMatcher",
+    item: dict,
+    supplier_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    kind: str = "purchase",
+) -> MatchResult:
+    """Match a bill line; if the product is not in the master at all, create
+    it and link it straight away.
+
+    Only a line with NO similar product (NEW / NEW BARCODE) is created. A
+    POSSIBLE MATCH is left for a person to pick, because creating it would
+    make a second copy of a product that probably already exists.
+    """
+    match = matcher.match(item, supplier_id if kind == "purchase" else None)
+    if match.product_id or match.status not in NEW_STATUSES:
+        return match
+    if not auto_create_products_enabled(matcher.session, matcher.company_id):
+        return match
+    source = dict(item)
+    if kind != "purchase":
+        source["rate"] = 0.0   # a sales rate is not a purchase rate
+    try:
+        product = matcher.create_product_from_item(source, user_id)
+    except ValueError:
+        return match           # nameless line: leave it for review
+    matcher.remember_mapping(
+        item.get("raw_name") or product.name, product.id, user_id=user_id,
+        supplier_id=supplier_id if kind == "purchase" else None,
+        barcode=re.sub(r"\D", "", item.get("barcode") or ""),
+    )
+    return MatchResult(
+        status=MatchStatus.MATCHED.value,
+        score=1.0,
+        reason="new product created automatically",
+        product_id=product.id,
+        product_name=product.name,
+    )
+
+
+def auto_link_new_lines(session: Session, company_id: int, lines, user_id=None,
+                        supplier_id: Optional[int] = None, kind: str = "purchase") -> int:
+    """For bills already saved: create + link every unlinked NEW line.
+    Returns how many lines were linked."""
+    matcher = ProductMatcher(session, company_id)
+    linked = 0
+    for line in lines:
+        if line.product_id is not None:
+            continue
+        item = {
+            "raw_name": line.raw_name or "", "normalized_name": line.normalized_name or "",
+            "hsn": line.hsn or "", "barcode": line.barcode or "", "unit": line.unit or "",
+            "gst_rate": line.gst_rate or 0.0, "rate": line.rate or 0.0,
+        }
+        result = resolve_or_create(matcher, item, supplier_id, user_id, kind)
+        if result.product_id and result.reason == "new product created automatically":
+            line.product_id = result.product_id
+            line.match_status = result.status
+            line.match_score = result.score
+            line.match_reason = result.reason
+            linked += 1
+    session.commit()
+    return linked

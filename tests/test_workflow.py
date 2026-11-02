@@ -120,10 +120,38 @@ class TestConfirmation:
         return invoice, items
 
     def test_blocked_when_a_line_has_no_product(self, session, company, user):
+        from database.database import set_setting
+        set_setting(session, company.id, "auto_create_products", "0")
         result = ingest(session, company, user)
         ok, message = confirm_invoice(session, company, user, result.invoice)
         assert not ok
         assert "not linked to a product" in message
+
+    def test_new_products_are_created_and_linked_automatically(self, session, company, user):
+        result = ingest(session, company, user)
+        lines = session.query(InvoiceItem).filter(
+            InvoiceItem.invoice_id == result.invoice.id).all()
+        assert lines and all(line.product_id for line in lines)
+        assert all(line.match_reason == "new product created automatically" for line in lines)
+        names = {p.name for p in session.query(Product).filter(Product.company_id == company.id)}
+        assert len(names) == len(lines)
+        # the next bill from the same supplier links to the same products, no duplicates
+        before = session.query(Product).filter(Product.company_id == company.id).count()
+        from services.product_matcher import ProductMatcher, resolve_or_create
+        matcher = ProductMatcher(session, company.id)
+        for line in lines:
+            r = resolve_or_create(matcher, {"raw_name": line.raw_name})
+            assert r.product_id == line.product_id
+        assert session.query(Product).filter(Product.company_id == company.id).count() == before
+
+    def test_possible_match_is_not_auto_created(self, session, company, user):
+        from services.product_matcher import ProductMatcher, resolve_or_create
+        make_product(session, company, "Parle-G Gold Biscuit 800 gm")
+        matcher = ProductMatcher(session, company.id)
+        result = resolve_or_create(matcher, {"raw_name": "Parle G Gold Biscut 800g pack"})
+        before = session.query(Product).filter(Product.company_id == company.id).count()
+        assert result.reason != "new product created automatically"
+        assert session.query(Product).filter(Product.company_id == company.id).count() == before
 
     def test_operator_cannot_confirm(self, session, company, user):
         invoice, _ = self._prepare(session, company, user)
