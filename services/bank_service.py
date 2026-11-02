@@ -332,7 +332,22 @@ def build_bank_voucher_payload(
             continue
         bill_allocations.append({"invoice_number": number or "", "amount": alloc.amount or 0})
 
+    # Group under which the party ledger is created if Tally lacks it:
+    # suppliers/customers as parties, anything typed by hand (Bank Charges,
+    # Rent, Salary, Interest ...) as an expense on a payment and an income
+    # on a receipt; the fallback Suspense ledger under Suspense A/c.
+    if transaction.match_party_type == "supplier":
+        party_group = get_mapping(session, company.id, "supplier_ledger_group", "Sundry Creditors")
+    elif transaction.match_party_type == "customer":
+        party_group = get_mapping(session, company.id, "customer_ledger_group", "Sundry Debtors")
+    elif party_ledger == "Suspense Account":
+        party_group = "Suspense A/c"
+    else:
+        party_group = "Indirect Expenses" if is_payment else "Indirect Incomes"
+
     return LedgerVoucherPayload(
+        party_group=party_group,
+        bank_group="Bank Accounts",
         company_name=company.tally_company_name or settings.TALLY_COMPANY or company.name,
         voucher_type=get_mapping(
             session, company.id,
@@ -366,6 +381,9 @@ def post_bank_transaction(
 
     payload = build_bank_voucher_payload(session, company, transaction)
 
+    if run_preflight:
+        from services import universal_persist
+        universal_persist.create_missing_masters(session, company, user, connector, payload)
     if run_preflight:
         problems = connector.preflight(payload)
         if problems:

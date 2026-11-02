@@ -91,7 +91,6 @@ def auto_create_enabled(session, company_id: int) -> bool:
 def ensure_tally_masters(session, company, user, connector, payload, invoice_field: str,
                          invoice_id: int) -> dict:
     """Create missing masters and write what was created to the audit log."""
-    from services import audit_service
     if not auto_create_enabled(session, company.id):
         return {"created": [], "failed": []}
     payload.party_group = payload.party_group or get_mapping(
@@ -102,6 +101,15 @@ def ensure_tally_masters(session, company, user, connector, payload, invoice_fie
     payload.stock_group = payload.stock_group or get_mapping(
         session, company.id, "stock_group", "Primary"
     )
+    return create_missing_masters(session, company, user, connector, payload,
+                                  **{invoice_field: invoice_id})
+
+
+def create_missing_masters(session, company, user, connector, payload, **audit_kwargs) -> dict:
+    """Run connector.ensure_masters and log what was created (or failed)."""
+    from services import audit_service
+    if not auto_create_enabled(session, company.id):
+        return {"created": [], "failed": []}
     result = connector.ensure_masters(payload)
     if result["created"] or result["failed"]:
         detail = ""
@@ -109,9 +117,8 @@ def ensure_tally_masters(session, company, user, connector, payload, invoice_fie
             detail += "Created in Tally: " + "; ".join(result["created"])
         if result["failed"]:
             detail += (" | " if detail else "") + "Could not create: " + "; ".join(result["failed"])
-        kwargs = {invoice_field: invoice_id}
         audit_service.record(
             session, company.id, "TALLY_MASTERS_AUTO_CREATED", detail[:4000],
-            user=user, **kwargs,
+            user=user, **audit_kwargs,
         )
     return result

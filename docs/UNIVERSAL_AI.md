@@ -73,7 +73,11 @@ action, and the bill only sits in review until someone decides.
   `packing_ledger`, `other_charges_ledger`).
 * **Auto-create masters (on by default):** before posting, any missing ledger, unit or stock item
   is created in Tally under the right group, and the list is written to the audit log
-  (`TALLY_MASTERS_AUTO_CREATED`). Switch off in **API Settings → Options**.
+  (`TALLY_MASTERS_AUTO_CREATED`). Works for Purchase, Sales and Bank (Payment/Receipt)
+  vouchers. Bank: the bank ledger goes under *Bank Accounts*, a matched supplier under
+  *Sundry Creditors*, a customer under *Sundry Debtors*, a ledger typed by hand (Rent,
+  Bank Charges, Salary …) under *Indirect Expenses* on a payment and *Indirect Incomes*
+  on a receipt. Switch off in **API Settings → Options**.
 * **Bug fixed:** Sales and Payment/Receipt vouchers used `<n>` instead of `<NAME>` in bill
   allocations, so Tally ignored the bill reference. Now `<NAME>`.
 

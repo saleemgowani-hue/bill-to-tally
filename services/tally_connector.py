@@ -394,6 +394,8 @@ class LedgerVoucherPayload:
     voucher_number: str = ""
     bill_allocations: List[dict] = field(default_factory=list)  # [{invoice_number, amount}]
     transaction_kind: str = "bank"
+    party_group: str = ""      # Tally group for an auto-created party ledger
+    bank_group: str = ""       # Tally group for an auto-created bank ledger
 
 
 def build_ledger_voucher_xml(payload: LedgerVoucherPayload) -> str:
@@ -640,10 +642,10 @@ def required_masters(payload) -> Dict[str, list]:
             if entry.get("ledger"):
                 ledgers.setdefault(entry["ledger"], entry.get("group") or "Suspense A/c")
     elif isinstance(payload, LedgerVoucherPayload):
-        ledgers[payload.bank_ledger] = "Bank Accounts"
-        ledgers[payload.party_ledger] = (
+        ledgers[payload.bank_ledger] = payload.bank_group or "Bank Accounts"
+        ledgers.setdefault(payload.party_ledger, payload.party_group or (
             "Sundry Creditors" if payload.direction == "payment" else "Sundry Debtors"
-        )
+        ))
     else:
         sales = payload.transaction_kind == "sales"
         ledgers[payload.supplier_ledger] = getattr(payload, "party_group", "") or (

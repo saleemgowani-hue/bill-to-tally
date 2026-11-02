@@ -171,3 +171,57 @@ def test_build_bank_voucher_payload_payment_direction(session, company, user):
     assert payload.amount == 500.0
     assert payload.bank_ledger == "HDFC Current"
     assert payload.party_ledger == "Misc Expense"
+
+
+def _matched(session, company, user, narration, debit, credit, party_type, **kw):
+    rows = [BankRow(txn_date="2026-09-08", narration=narration, reference_no="",
+                    debit=debit, credit=credit, balance=0.0, row_hash=narration)]
+    created, _ = import_bank_statement(session, company, user, "Axis Current", "s.xlsx", rows)
+    txn = created[0]
+    set_manual_match(session, txn, party_type, **kw)
+    ok, msg = allocate(session, txn, [])
+    assert ok, msg
+    return txn
+
+
+def test_bank_post_auto_creates_missing_ledgers(session, company, user):
+    from database.models import AuditLog
+
+    txn = _matched(session, company, user, "OFFICE RENT OCT", 15000.0, 0.0,
+                   "ledger", ledger_name="Office Rent")
+    connector = MockTallyConnector({"test_mode": False})
+    assert "Office Rent" not in connector.list_ledgers()
+
+    result = post_bank_transaction(session, company, user, txn, connector, run_preflight=True)
+    assert result.success, result.message
+    assert "Office Rent" in connector.list_ledgers()
+    assert "Axis Current" in connector.list_ledgers()
+    log = session.query(AuditLog).filter(
+        AuditLog.company_id == company.id, AuditLog.action == "TALLY_MASTERS_AUTO_CREATED"
+    ).all()[-1].detail
+    assert "Ledger 'Office Rent' under Indirect Expenses" in log
+    assert "Ledger 'Axis Current' under Bank Accounts" in log
+
+
+def test_bank_receipt_ledger_goes_under_income_and_parties_under_debtors(session, company, user):
+    txn = _matched(session, company, user, "INTEREST CREDIT", 0.0, 120.0,
+                   "ledger", ledger_name="Bank Interest")
+    assert build_bank_voucher_payload(session, company, txn).party_group == "Indirect Incomes"
+
+    customer = find_or_create_customer(session, company.id, "Ravi Traders", "", "")
+    session.commit()
+    txn2 = _matched(session, company, user, "NEFT CR RAVI TRADERS", 0.0, 5000.0,
+                    "customer", party_id=customer.id)
+    assert build_bank_voucher_payload(session, company, txn2).party_group == "Sundry Debtors"
+
+
+def test_bank_auto_create_can_be_switched_off(session, company, user):
+    from database.database import set_setting
+
+    set_setting(session, company.id, "auto_create_masters", "0")
+    txn = _matched(session, company, user, "ELECTRICITY BILL", 900.0, 0.0,
+                   "ledger", ledger_name="Electricity Charges")
+    result = post_bank_transaction(session, company, user, txn, MockTallyConnector({"test_mode": False}),
+                                   run_preflight=True)
+    assert not result.success
+    assert "does not exist in Tally" in result.message
