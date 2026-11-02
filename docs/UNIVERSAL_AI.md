@@ -78,6 +78,12 @@ action, and the bill only sits in review until someone decides.
   *Sundry Creditors*, a customer under *Sundry Debtors*, a ledger typed by hand (Rent,
   Bank Charges, Salary …) under *Indirect Expenses* on a payment and *Indirect Incomes*
   on a receipt. Switch off in **API Settings → Options**.
+* **Voucher numbers:** Tally Connection → *Voucher numbers* — for each of Purchase, Sales,
+  Payment, Receipt, Journal, Contra, Debit Note, Credit Note choose *Tally decides*,
+  *My own series* (prefix + start number + digits + suffix, e.g. `PUR/0101/26-27`) or
+  *Same as bill number*. A number is used only after Tally accepts the voucher; Test Mode
+  never uses one. Tally keeps the number only if the voucher type's numbering method is
+  Manual or Automatic (Manual Override).
 * **Bug fixed:** Sales and Payment/Receipt vouchers used `<n>` instead of `<NAME>` in bill
   allocations, so Tally ignored the bill reference. Now `<NAME>`.
 

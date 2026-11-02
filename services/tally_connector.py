@@ -93,11 +93,18 @@ class VoucherPayload:
     transaction_kind: str = "purchase"   # "purchase" | "sales"
     party_group: str = ""                # group for an auto-created party ledger
     stock_group: str = ""                # group for auto-created stock items
+    vch_number: str = ""                 # Tally voucher number ("" = Tally decides)
 
 
 # --------------------------------------------------------------------------
 # XML helpers
 # --------------------------------------------------------------------------
+def vch_number_tag(payload) -> str:
+    """<VOUCHERNUMBER> line, or nothing when Tally should number the voucher."""
+    number = (getattr(payload, "vch_number", "") or "").strip()
+    return f"\n            <VOUCHERNUMBER>{x(number)}</VOUCHERNUMBER>" if number else ""
+
+
 def x(value) -> str:
     """Escape a value for XML content."""
     return escape(str(value if value is not None else ""))
@@ -218,7 +225,7 @@ def build_purchase_voucher_xml(payload: VoucherPayload) -> str:
           <VOUCHER VCHTYPE="{x(payload.voucher_type)}" ACTION="Create" OBJVIEW="Invoice Voucher View" REMOTEID="{x(remote_id)}">
             <DATE>{date_value}</DATE>
             <EFFECTIVEDATE>{date_value}</EFFECTIVEDATE>
-            <VOUCHERTYPENAME>{x(payload.voucher_type)}</VOUCHERTYPENAME>
+            <VOUCHERTYPENAME>{x(payload.voucher_type)}</VOUCHERTYPENAME>{vch_number_tag(payload)}
             <REFERENCE>{x(payload.invoice_number)}</REFERENCE>
             <REFERENCEDATE>{date_value}</REFERENCEDATE>
             <PARTYLEDGERNAME>{x(payload.supplier_ledger)}</PARTYLEDGERNAME>
@@ -344,7 +351,7 @@ def build_sales_voucher_xml(payload: VoucherPayload) -> str:
           <VOUCHER VCHTYPE="{x(payload.voucher_type)}" ACTION="Create" OBJVIEW="Invoice Voucher View" REMOTEID="{x(remote_id)}">
             <DATE>{date_value}</DATE>
             <EFFECTIVEDATE>{date_value}</EFFECTIVEDATE>
-            <VOUCHERTYPENAME>{x(payload.voucher_type)}</VOUCHERTYPENAME>
+            <VOUCHERTYPENAME>{x(payload.voucher_type)}</VOUCHERTYPENAME>{vch_number_tag(payload)}
             <REFERENCE>{x(payload.invoice_number)}</REFERENCE>
             <REFERENCEDATE>{date_value}</REFERENCEDATE>
             <PARTYLEDGERNAME>{x(payload.supplier_ledger)}</PARTYLEDGERNAME>
@@ -396,6 +403,7 @@ class LedgerVoucherPayload:
     transaction_kind: str = "bank"
     party_group: str = ""      # Tally group for an auto-created party ledger
     bank_group: str = ""       # Tally group for an auto-created bank ledger
+    vch_number: str = ""       # Tally voucher number ("" = Tally decides)
 
 
 def build_ledger_voucher_xml(payload: LedgerVoucherPayload) -> str:
@@ -462,7 +470,7 @@ def build_ledger_voucher_xml(payload: LedgerVoucherPayload) -> str:
           <VOUCHER VCHTYPE="{x(payload.voucher_type)}" ACTION="Create" REMOTEID="{x(remote_id)}">
             <DATE>{date_value}</DATE>
             <EFFECTIVEDATE>{date_value}</EFFECTIVEDATE>
-            <VOUCHERTYPENAME>{x(payload.voucher_type)}</VOUCHERTYPENAME>
+            <VOUCHERTYPENAME>{x(payload.voucher_type)}</VOUCHERTYPENAME>{vch_number_tag(payload)}
             <REFERENCE>{x(payload.voucher_number)}</REFERENCE>
             <PARTYLEDGERNAME>{x(payload.party_ledger)}</PARTYLEDGERNAME>
             <NARRATION>{x(payload.narration)}</NARRATION>
@@ -505,6 +513,7 @@ class AccountingVoucherPayload:
     voucher_number: str = ""
     party_ledger: str = ""
     transaction_kind: str = "journal"  # journal | contra | debit_note | credit_note
+    vch_number: str = ""               # overrides voucher_number when set
 
 
 ACCOUNTING_VOUCHER_TYPES = {
@@ -586,7 +595,7 @@ def build_accounting_voucher_xml(payload: AccountingVoucherPayload) -> str:
             <DATE>{date_value}</DATE>
             <EFFECTIVEDATE>{date_value}</EFFECTIVEDATE>
             <VOUCHERTYPENAME>{x(payload.voucher_type)}</VOUCHERTYPENAME>
-            <VOUCHERNUMBER>{x(payload.voucher_number)}</VOUCHERNUMBER>
+            <VOUCHERNUMBER>{x(payload.vch_number or payload.voucher_number)}</VOUCHERNUMBER>
             <REFERENCE>{x(payload.voucher_number)}</REFERENCE>{party}
             <NARRATION>{x(payload.narration)}</NARRATION>
             <ISINVOICE>No</ISINVOICE>{''.join(lines)}

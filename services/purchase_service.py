@@ -38,6 +38,7 @@ from database.models import (
     User,
 )
 from services import universal_persist
+from services import voucher_numbering
 from services import audit_service
 from services.ai_invoice_parser import InvoiceParser, ParsedInvoice
 from services.invoice_validator import (
@@ -744,6 +745,7 @@ def post_to_tally(
         )
 
     payload = build_voucher_payload(session, company, invoice)
+    voucher_numbering.assign(session, company.id, payload, invoice.invoice_number or "")
 
     if run_preflight:
         universal_persist.ensure_tally_masters(
@@ -793,6 +795,10 @@ def post_to_tally(
             user=user, invoice_id=invoice.id,
         )
         return result, None
+
+    voucher_numbering.consume(session, company.id, payload, result)
+    if payload.vch_number:
+        result.message = f"{result.message} Voucher no. {payload.vch_number}."
 
     transaction = existing or PurchaseTransaction(
         company_id=company.id,

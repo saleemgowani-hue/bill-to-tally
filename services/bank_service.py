@@ -40,6 +40,7 @@ from database.models import (
     Supplier,
     User,
 )
+from services import voucher_numbering
 from services import audit_service
 from services.bank_statement_import import BankRow
 from services.tally_connector import LedgerVoucherPayload, TallyConnector, TallyResult
@@ -380,6 +381,7 @@ def post_bank_transaction(
         return TallyResult(False, f"Transaction is '{transaction.status}'. Match and allocate it first.")
 
     payload = build_bank_voucher_payload(session, company, transaction)
+    voucher_numbering.assign(session, company.id, payload, transaction.reference_no or "")
 
     if run_preflight:
         from services import universal_persist
@@ -414,6 +416,10 @@ def post_bank_transaction(
             session, company.id, "BANK_TALLY_POST_FAILED", result.message[:2000], user=user,
         )
         return result
+
+    voucher_numbering.consume(session, company.id, payload, result)
+    if payload.vch_number:
+        result.message = f"{result.message} Voucher no. {payload.vch_number}."
 
     transaction.mode = result.mode
     transaction.tally_voucher_id = result.voucher_id or ""

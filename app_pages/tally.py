@@ -36,14 +36,17 @@ def render() -> None:
     connector, mode, is_test = _connector_from_settings(db, company)
     test_mode_banner(is_test, f"Connector: {connector.name}")
 
-    tab_conn, tab_map, tab_masters, tab_help = st.tabs(
-        ["Connection", "Ledger mapping", "Tally masters", "How it works"]
+    tab_conn, tab_map, tab_numbers, tab_masters, tab_help = st.tabs(
+        ["Connection", "Ledger mapping", "Voucher numbers / वाउचर नंबर",
+         "Tally masters", "How it works"]
     )
 
     with tab_conn:
         _connection_tab(db, company, user, mode, is_test)
     with tab_map:
         _mapping_tab(db, company, user, connector)
+    with tab_numbers:
+        _numbers_tab(db, company, user)
     with tab_masters:
         _masters_tab(connector)
     with tab_help:
@@ -241,6 +244,80 @@ def _mapping_tab(db, company, user, connector):
             st.caption("Edit these on the Products page.")
         else:
             st.caption("No products yet.")
+
+
+def _numbers_tab(db, company, user):
+    from services import voucher_numbering as vn
+
+    st.markdown(
+        "Choose the number each type of Tally voucher should start from. "
+        "/ हर वाउचर किस नंबर से शुरू हो, यहाँ चुनें।"
+    )
+    st.info(
+        "Tally keeps the number sent from here only if that voucher type's "
+        "**Method of Voucher Numbering** is **Manual** or **Automatic (Manual "
+        "Override)** — in Tally: Alter → Voucher Type → Purchase (Sales, Payment …). "
+        "With plain *Automatic*, Tally gives its own number. A number is used up only "
+        "after Tally accepts the voucher; a failed post re-uses it. Test Mode never "
+        "uses a number. To restart on 1st April, set the start number back to 1."
+    )
+    configs = vn.all_configs(db, company.id)
+    modes = list(vn.MODES)
+    edited = {}
+    for series, label in vn.SERIES.items():
+        cfg = configs[series]
+        with st.expander(
+            f"{label} — "
+            + (cfg.format() if cfg.mode == "custom"
+               else vn.MODES[cfg.mode]),
+            expanded=cfg.mode == "custom",
+        ):
+            mode = st.radio(
+                "Numbering", modes, index=modes.index(cfg.mode),
+                format_func=lambda m: vn.MODES[m], horizontal=True,
+                key=f"vn_mode_{series}", disabled=not user.is_admin,
+            )
+            new = vn.SeriesConfig(mode=mode, prefix=cfg.prefix, next_number=cfg.next_number,
+                                  digits=cfg.digits, suffix=cfg.suffix)
+            if mode == "custom":
+                c1, c2, c3, c4 = st.columns(4)
+                new.prefix = c1.text_input("Prefix", cfg.prefix, key=f"vn_pre_{series}",
+                                           disabled=not user.is_admin)
+                new.next_number = int(c2.number_input(
+                    "Next / start number", min_value=0, value=int(cfg.next_number), step=1,
+                    key=f"vn_num_{series}", disabled=not user.is_admin))
+                new.digits = int(c3.number_input(
+                    "Digits (0001 = 4)", min_value=1, max_value=10, value=int(cfg.digits),
+                    key=f"vn_dig_{series}", disabled=not user.is_admin))
+                new.suffix = c4.text_input("Suffix", cfg.suffix, key=f"vn_suf_{series}",
+                                           disabled=not user.is_admin)
+                st.markdown(
+                    f"Next three vouchers: **{new.format()}**, "
+                    f"**{new.format(new.next_number + 1)}**, **{new.format(new.next_number + 2)}**"
+                )
+            elif mode == "invoice":
+                st.caption("The voucher number will be the bill / invoice number (for bank "
+                           "entries: the cheque / UTR reference).")
+            edited[series] = new
+    if user.is_admin and st.button("💾 Save voucher numbers", type="primary"):
+        changes = []
+        for series, new in edited.items():
+            old = configs[series]
+            if (new.mode, new.prefix, new.next_number, new.digits, new.suffix) != (
+                old.mode, old.prefix, old.next_number, old.digits, old.suffix
+            ):
+                vn.save_config(db, company.id, series, new)
+                changes.append(
+                    f"{series}: {vn.MODES[new.mode]}"
+                    + (f" from {new.format()}" if new.mode == "custom" else "")
+                )
+        if changes:
+            audit_service.record(db, company.id, "VOUCHER_NUMBERING_CHANGED",
+                                 "; ".join(changes), user=user)
+            st.success("Saved. / सेव हो गया।")
+            st.rerun()
+        else:
+            st.info("Nothing changed.")
 
 
 def _masters_tab(connector):

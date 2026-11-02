@@ -757,6 +757,12 @@ def _tally_section(db, company, user, invoice) -> None:
     test_mode_banner(is_test, f"Connector: {connector.name}")
 
     payload = build_sales_voucher_payload(db, company, invoice)
+    from services import voucher_numbering
+    _vno = voucher_numbering.assign(db, company.id, payload, invoice.invoice_number or "")
+    st.caption(
+        f"Tally voucher no.: **{_vno}**" if _vno
+        else "Tally voucher no.: decided by Tally (change in Tally Connection → Voucher numbers)"
+    )
     preview = st.columns(4)
     preview[0].metric("Voucher type", payload.voucher_type)
     preview[1].metric("Customer ledger", payload.supplier_ledger[:20])
