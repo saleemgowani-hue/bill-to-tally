@@ -159,6 +159,15 @@ class Settings:
 
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+    # Universal engine: pages sent to Gemini per request for long PDFs.
+    GEMINI_PAGES_PER_CALL = _i("GEMINI_PAGES_PER_CALL", 4)
+    # Cost ESTIMATE only (admin can change these). USD per 1M tokens.
+    GEMINI_PRICE_INPUT_PER_M_USD = _f("GEMINI_PRICE_INPUT_PER_M_USD", 0.50)
+    GEMINI_PRICE_OUTPUT_PER_M_USD = _f("GEMINI_PRICE_OUTPUT_PER_M_USD", 3.00)
+    USD_TO_INR = _f("USD_TO_INR", 88.0)
+    # Default monthly Gemini call limit per customer on the central key
+    # (0 = unlimited). Super Admin can override per customer.
+    CENTRAL_API_MONTHLY_LIMIT = _i("CENTRAL_API_MONTHLY_LIMIT", 0)
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")

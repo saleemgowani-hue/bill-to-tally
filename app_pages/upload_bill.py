@@ -64,6 +64,13 @@ def build_parser(db, company):
         if fb_model:
             config["model"] = fb_model
     st.session_state.ocr_provider = provider_name
+    if provider_name == "universal":
+        from services import api_manager
+        return InvoiceParser(
+            api_manager.universal_provider(db, company, user_id=st.session_state.get("user_id")),
+            fallback=api_manager.offline_fallback_provider(db, company),
+            our_company=company.name or "",
+        ), provider_name
     return InvoiceParser(get_provider(provider_name, config)), provider_name
 
 
@@ -202,6 +209,8 @@ def _process(db, company, user, parser, filename, raw, images, show_preview=True
         f"{(invoice.overall_confidence or 0):.0%}",
     )
 
+    _show_classification(company, invoice, result.parsed)
+
     errors = len(result.report.errors)
     warnings = len(result.report.warnings)
     if errors:
@@ -216,6 +225,33 @@ def _process(db, company, user, parser, filename, raw, images, show_preview=True
         st.session_state.nav = "Review Bills"
         st.rerun()
     return result
+
+
+def _show_classification(company, invoice, parsed, flow: str = "purchase") -> None:
+    """What kind of document this is, and its verification status."""
+    from services.document_classifier import ACTIONS, classify_parsed
+
+    if parsed.fallback_used:
+        st.warning(
+            "Read with the OFFLINE engine because Gemini was not reachable — "
+            "check every line. / ऑफ़लाइन इंजन से पढ़ा गया, हर लाइन जांचें।"
+        )
+    if not (parsed.data.get("universal") or {}):
+        return
+    cls = classify_parsed(parsed.data, flow=flow, our_gstin=company.gstin or "",
+                          raw_text=parsed.raw_text)
+    st.markdown(
+        f"**Document type / दस्तावेज़:** {cls.label} · {cls.confidence:.0%} &nbsp; "
+        f"**Status:** {invoice.verification_status or '—'}"
+    )
+    for note in cls.notes:
+        st.warning(note)
+    if not cls.matches_flow:
+        st.info(
+            f"Suggested action: **{ACTIONS.get(cls.suggested_action, cls.suggested_action)}**. "
+            "It has been saved for review only — nothing is posted to Tally until "
+            "someone confirms it."
+        )
 
 
 def _upload_tab(db, company, user, parser):

@@ -304,6 +304,7 @@ PAGES = {
     "Products":         ("📦", "products",         "#6941c6"),
     "Suppliers":        ("🏭", "suppliers",        "#0e7090"),
     "Tally Connection": ("🔗", "tally",            "#c11574"),
+    "API Settings":     ("🔑", "api_settings",     "#0086c9"),
     "Purchase History": ("🧾", "purchase_history", "#475467"),
     "Reports":          ("📈", "reports",          "#b54708"),
     "Settings":         ("⚙️", "settings",         "#344054"),

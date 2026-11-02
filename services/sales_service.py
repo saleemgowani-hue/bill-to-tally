@@ -45,6 +45,7 @@ from database.models import (
     StockMovement,
     User,
 )
+from services import universal_persist
 from services import audit_service
 from services.ai_invoice_parser import InvoiceParser, ParsedInvoice
 from services.customer_service import find_or_create_customer
@@ -212,6 +213,7 @@ def _finalize_sales_invoice(
     report = validator.validate(data, buyer_gstin=company.gstin or "")
     invoice.tax_scope = report.tax_scope
     invoice.validation_json = json.dumps(report.to_dict())[:60000]
+    universal_persist.apply_universal_fields(invoice, data, report)
 
     # -- product matching ------------------------------------------------
     matcher = ProductMatcher(session, company.id)
@@ -448,6 +450,7 @@ def sales_invoice_to_dict(invoice: SalesInvoice, items: List[SalesInvoiceItem]) 
         "round_off": invoice.round_off or 0.0,
         "grand_total": invoice.grand_total or 0.0,
         "overall_confidence": invoice.overall_confidence or 0.0,
+        "universal": universal_persist.universal_block(invoice),
     }
 
 
@@ -485,6 +488,7 @@ def revalidate_sales(
     )
     invoice.tax_scope = report.tax_scope
     invoice.validation_json = json.dumps(report.to_dict())[:60000]
+    universal_persist.refresh_status(invoice, report)
     for index, item in enumerate(items):
         item.line_warnings = json.dumps(report.line_flags.get(index, []))[:4000]
     session.commit()
@@ -528,6 +532,7 @@ def confirm_sales_invoice(
     invoice.status = InvoiceStatus.CONFIRMED.value
     invoice.confirmed_by = user.id
     invoice.confirmed_at = dt.datetime.now(dt.timezone.utc)
+    universal_persist.mark_ready(invoice)
     session.commit()
 
     detail = (
@@ -618,6 +623,8 @@ def build_sales_voucher_payload(
             tax_lines.append(
                 {"ledger": get_mapping(session, company.id, key, default_name), "amount": value}
             )
+
+    tax_lines.extend(universal_persist.charge_ledger_lines(session, company.id, invoice, "sales"))
 
     return VoucherPayload(
         company_name=company.tally_company_name or settings.TALLY_COMPANY or company.name,
@@ -728,6 +735,10 @@ def post_sales_to_tally(
 
     payload = build_sales_voucher_payload(session, company, invoice)
 
+    if run_preflight:
+        universal_persist.ensure_tally_masters(
+            session, company, user, connector, payload, "sales_invoice_id", invoice.id
+        )
     if run_preflight:
         problems = connector.preflight(payload)
         if problems:

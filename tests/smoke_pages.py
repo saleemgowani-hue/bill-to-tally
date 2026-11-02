@@ -19,7 +19,7 @@ DEMO_EMAIL = "demo@snsoftech.local"
 PAGES = [
     "Dashboard", "Upload Bill", "Manifest to Excel", "Review Bills",
     "Products", "Suppliers", "Tally Connection", "Purchase History",
-    "Reports", "Settings",
+    "Reports", "Settings", "API Settings", "Sales", "Bank",
 ]
 
 

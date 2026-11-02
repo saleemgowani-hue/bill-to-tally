@@ -201,6 +201,7 @@ Set it per company in **Settings → AI & OCR**, or globally in `.env`.
 
 | Provider | Value | Notes |
 |---|---|---|
+| **Universal AI (Gemini)** | `universal` | **Recommended.** Any industry, any document type, multi-page PDFs read in parts, offline fallback. Configure in **API Settings**. See [docs/UNIVERSAL_AI.md](docs/UNIVERSAL_AI.md). |
 | Mock | `mock` | Fixed sample bill. No key needed. Use for demos and tests. |
 | Google Gemini | `gemini` | Recommended. Fast, cheap, strong on Indian invoices. |
 | OpenAI | `openai` | `gpt-4o-mini` or better. |

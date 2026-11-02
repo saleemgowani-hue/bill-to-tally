@@ -8,6 +8,7 @@ Two hard rules from the product spec:
 """
 from __future__ import annotations
 
+import datetime as dt
 import re
 from dataclasses import dataclass, field
 from enum import Enum
@@ -54,6 +55,7 @@ class ValidationReport:
     extracted_total: float = 0.0
     difference: float = 0.0
     tax_scope: str = "UNKNOWN"
+    calculated_charges: float = 0.0
     requires_review: bool = True
     line_flags: Dict[int, List[str]] = field(default_factory=dict)
 
@@ -84,7 +86,9 @@ class ValidationReport:
             "extracted_total": self.extracted_total,
             "difference": self.difference,
             "tax_scope": self.tax_scope,
+            "calculated_charges": self.calculated_charges,
             "requires_review": self.requires_review,
+            "verification_status": verification_status(self),
         }
 
 
@@ -124,6 +128,98 @@ def detect_tax_scope(
     if has_igst and not has_cgst_sgst:
         return "INTER-STATE"
     return "UNKNOWN"
+
+
+
+# --------------------------------------------------------------------------
+# Amount in words (Indian numbering: crore / lakh / thousand / hundred)
+# --------------------------------------------------------------------------
+_UNITS = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+    "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
+    "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
+    "thirty": 30, "forty": 40, "fourty": 40, "fifty": 50, "sixty": 60,
+    "seventy": 70, "eighty": 80, "ninety": 90,
+}
+_SCALES = {
+    "hundred": 100, "thousand": 1_000, "lakh": 100_000, "lakhs": 100_000,
+    "lac": 100_000, "lacs": 100_000, "million": 1_000_000,
+    "crore": 10_000_000, "crores": 10_000_000, "billion": 1_000_000_000,
+}
+_FILLER = {"and", "rupees", "rupee", "rs", "inr", "only", "indian", "a", "&"}
+
+
+def _words_block(tokens) -> Optional[float]:
+    total, current, seen = 0, 0, False
+    for tok in tokens:
+        if tok in _FILLER:
+            continue
+        if tok in _UNITS:
+            current += _UNITS[tok]
+            seen = True
+        elif tok == "hundred":
+            current = (current or 1) * 100
+            seen = True
+        elif tok in _SCALES:
+            total += (current or 1) * _SCALES[tok]
+            current = 0
+            seen = True
+        elif tok.isdigit():
+            current += int(tok)
+            seen = True
+        else:
+            return None
+    return float(total + current) if seen else None
+
+
+def words_to_number(text: str) -> Optional[float]:
+    """'Rupees Ten Thousand Six Hundred and Twenty Two and Fifty Paise Only'
+    -> 10622.50. Returns None when the text is not a readable amount."""
+    cleaned = re.sub(r"[^a-z0-9& ]", " ", (text or "").lower().replace("-", " "))
+    tokens = cleaned.split()
+    if not tokens:
+        return None
+    paise = 0.0
+    if "paise" in tokens or "paisa" in tokens:
+        idx = tokens.index("paise") if "paise" in tokens else tokens.index("paisa")
+        # paise words sit between the last "and" before them and "paise"
+        head = tokens[:idx]
+        cut = max((i for i, t in enumerate(head) if t == "and"), default=-1)
+        paise_tokens = head[cut + 1:] if cut >= 0 else []
+        rupee_tokens = head[:cut] if cut >= 0 else head
+        p = _words_block(paise_tokens) if paise_tokens else None
+        if p is None:
+            return None
+        paise = p / 100.0
+        tokens = rupee_tokens
+    rupees = _words_block(tokens) if tokens else 0.0
+    if rupees is None:
+        return None
+    return round(rupees + paise, 2)
+
+
+STATUS_VERIFIED = "Verified"
+STATUS_NEEDS_REVIEW = "Needs Review"
+STATUS_ERROR = "Error"
+STATUS_READY = "Ready for Import"
+
+
+def verification_status(report: "ValidationReport", confirmed: bool = False) -> str:
+    """Final status shown on every document.
+
+    Error        — at least one blocking problem.
+    Needs Review — warnings a human must look at.
+    Verified     — every check passed, not yet confirmed by a user.
+    Ready for Import — confirmed by a user and nothing blocking.
+    """
+    if report.errors:
+        return STATUS_ERROR
+    if confirmed:
+        return STATUS_READY
+    if report.warnings:
+        return STATUS_NEEDS_REVIEW
+    return STATUS_VERIFIED
 
 
 class InvoiceValidator:
@@ -194,7 +290,13 @@ class InvoiceValidator:
         report.calculated_tax = round(tax_total, 2)
         report.calculated_cess = round(cess_total, 2)
         round_off = money(data.get("round_off"))
-        report.calculated_total = round(subtotal + tax_total + cess_total + round_off, 2)
+        # Freight / packing / other charges printed below the item table
+        # (universal extraction only). They are part of the bill total.
+        from services.universal_schema import charges_total
+        report.calculated_charges = charges_total(data)
+        report.calculated_total = round(
+            subtotal + tax_total + cess_total + report.calculated_charges + round_off, 2
+        )
         report.extracted_total = money(data.get("grand_total"))
 
         # -- invoice level reconciliation ------------------------------
@@ -241,6 +343,44 @@ class InvoiceValidator:
                 f"Printed tax total ₹{declared_tax:,.2f} differs from the sum of "
                 f"line taxes ₹{report.calculated_tax:,.2f}.",
             )
+
+        # -- amount in words vs figures --------------------------------
+        words = ((data.get("universal") or {}).get("amount_in_words") or "").strip()
+        if words and report.extracted_total:
+            spoken = words_to_number(words)
+            if spoken is None:
+                report.add(
+                    Severity.INFO, "amount_in_words",
+                    f"Amount in words could not be read as a number: '{words[:120]}'.",
+                )
+            elif abs(spoken - report.extracted_total) > max(self.tolerance, 1.0):
+                report.add(
+                    Severity.WARNING, "amount_in_words",
+                    f"Amount in words (₹{spoken:,.2f}) does not match the grand "
+                    f"total figure ₹{report.extracted_total:,.2f}. Check which is right.",
+                )
+
+        # -- dates -----------------------------------------------------
+        inv_date = (invoice.get("invoice_date") or "").strip()
+        if inv_date:
+            try:
+                parsed_date = dt.date.fromisoformat(inv_date)
+                today = dt.date.today()
+                if parsed_date > today + dt.timedelta(days=1):
+                    report.add(
+                        Severity.WARNING, "invoice.invoice_date",
+                        f"Invoice date {inv_date} is in the future — check day/month order.",
+                    )
+                elif (today - parsed_date).days > 400:
+                    report.add(
+                        Severity.WARNING, "invoice.invoice_date",
+                        f"Invoice date {inv_date} is more than a year old — check the year.",
+                    )
+            except ValueError:
+                report.add(
+                    Severity.ERROR, "invoice.invoice_date",
+                    f"Invoice date '{inv_date}' is not a valid date.",
+                )
 
         # -- confidence -------------------------------------------------
         overall = float(data.get("overall_confidence") or 0.0)

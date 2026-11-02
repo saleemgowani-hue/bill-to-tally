@@ -242,6 +242,13 @@ class Invoice(Base):
     tax_total = Column(Float, default=0.0)
     cess_total = Column(Float, default=0.0)
     round_off = Column(Float, default=0.0)
+    # Charges printed outside the item table (universal extraction)
+    freight = Column(Float, default=0.0)
+    packing_charges = Column(Float, default=0.0)
+    other_charges = Column(Float, default=0.0)
+    document_type = Column(String(40))           # see services/universal_schema.py
+    verification_status = Column(String(30))     # Verified / Needs Review / Error / Ready for Import
+    universal_json = Column(Text)                # extra extracted fields (e-way bill, words ...)
     grand_total = Column(Float, default=0.0)
 
     tax_scope = Column(String(20))             # INTRA-STATE / INTER-STATE / UNKNOWN
@@ -391,6 +398,13 @@ class SalesInvoice(Base):
     tax_total = Column(Float, default=0.0)
     cess_total = Column(Float, default=0.0)
     round_off = Column(Float, default=0.0)
+    # Charges printed outside the item table (universal extraction)
+    freight = Column(Float, default=0.0)
+    packing_charges = Column(Float, default=0.0)
+    other_charges = Column(Float, default=0.0)
+    document_type = Column(String(40))           # see services/universal_schema.py
+    verification_status = Column(String(30))     # Verified / Needs Review / Error / Ready for Import
+    universal_json = Column(Text)                # extra extracted fields (e-way bill, words ...)
     grand_total = Column(Float, default=0.0)
 
     tax_scope = Column(String(20))             # INTRA-STATE / INTER-STATE / UNKNOWN
@@ -645,3 +659,32 @@ class License(Base):
     expires_at = Column(DateTime)
     activated_by = Column(Integer, ForeignKey("users.id"))
     notes = Column(Text)
+
+
+class ApiUsage(Base):
+    """One hosted-AI call (one page group of one document).
+
+    Lets SN Softech see customer-wise Gemini consumption on the central key,
+    estimate cost, and enforce monthly limits. Tokens come from Google's own
+    usageMetadata; cost is an estimate from configurable rates.
+    """
+
+    __tablename__ = "api_usage"
+    __table_args__ = (Index("ix_api_usage_company_time", "company_id", "created_at"),)
+
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    provider = Column(String(40))
+    model = Column(String(80))
+    key_mode = Column(String(20))          # customer | central
+    pages = Column(Integer, default=0)
+    prompt_tokens = Column(Integer, default=0)
+    output_tokens = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    cost_inr = Column(Float, default=0.0)
+    duration_ms = Column(Integer, default=0)
+    success = Column(Boolean, default=True)
+    error = Column(Text)
+    document_name = Column(String(260))
+    created_at = Column(DateTime, default=utcnow)

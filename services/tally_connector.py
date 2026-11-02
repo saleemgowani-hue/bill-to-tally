@@ -91,6 +91,8 @@ class VoucherPayload:
     grand_total: float = 0.0
     reference_id: str = ""
     transaction_kind: str = "purchase"   # "purchase" | "sales"
+    party_group: str = ""                # group for an auto-created party ledger
+    stock_group: str = ""                # group for auto-created stock items
 
 
 # --------------------------------------------------------------------------
@@ -316,7 +318,7 @@ def build_sales_voucher_xml(payload: VoucherPayload) -> str:
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
               <AMOUNT>-{amount(total)}</AMOUNT>
               <BILLALLOCATIONS.LIST>
-                <n>{x(payload.invoice_number)}</n>
+                <NAME>{x(payload.invoice_number)}</NAME>
                 <BILLTYPE>New Ref</BILLTYPE>
                 <AMOUNT>-{amount(total)}</AMOUNT>
               </BILLALLOCATIONS.LIST>
@@ -401,7 +403,7 @@ def build_ledger_voucher_xml(payload: LedgerVoucherPayload) -> str:
     bill_blocks = "".join(
         f"""
               <BILLALLOCATIONS.LIST>
-                <n>{x(alloc.get('invoice_number'))}</n>
+                <NAME>{x(alloc.get('invoice_number'))}</NAME>
                 <BILLTYPE>Agst Ref</BILLTYPE>
                 <AMOUNT>{'-' if is_payment else ''}{amount(float(alloc.get('amount') or 0))}</AMOUNT>
               </BILLALLOCATIONS.LIST>"""
@@ -471,9 +473,202 @@ def build_ledger_voucher_xml(payload: LedgerVoucherPayload) -> str:
 </ENVELOPE>"""
 
 
+
+# --------------------------------------------------------------------------
+# General accounting vouchers: Journal, Contra, Debit Note, Credit Note
+# --------------------------------------------------------------------------
+@dataclass
+class AccountingVoucherPayload:
+    """Any voucher made only of ledger lines (no stock).
+
+    entries: [{"ledger": str, "debit": float, "credit": float,
+               "bill_ref": str (optional), "bill_type": "New Ref"|"Agst Ref"}]
+    Exactly one of debit/credit is non-zero on each line, and total debits
+    must equal total credits — build_accounting_voucher_xml refuses an
+    unbalanced voucher rather than letting Tally (or worse, nobody) catch it.
+
+    Typical use:
+      Journal     — any adjustment.
+      Contra      — cash <-> bank, bank <-> bank.
+      Debit Note  — purchase return: Dr supplier, Cr purchase/ GST input.
+      Credit Note — sales return:    Dr sales/ GST output, Cr customer.
+    """
+
+    company_name: str
+    voucher_type: str
+    voucher_date: str                  # ISO yyyy-mm-dd
+    entries: List[dict] = field(default_factory=list)
+    narration: str = ""
+    reference_id: str = ""
+    voucher_number: str = ""
+    party_ledger: str = ""
+    transaction_kind: str = "journal"  # journal | contra | debit_note | credit_note
+
+
+ACCOUNTING_VOUCHER_TYPES = {
+    "journal": "Journal",
+    "contra": "Contra",
+    "debit_note": "Debit Note",
+    "credit_note": "Credit Note",
+}
+
+
+def check_balanced(entries: List[dict], tolerance: float = 0.01) -> List[str]:
+    problems = []
+    debit = credit = 0.0
+    for index, entry in enumerate(entries, start=1):
+        d = round(float(entry.get("debit") or 0), 2)
+        c = round(float(entry.get("credit") or 0), 2)
+        if not (entry.get("ledger") or "").strip():
+            problems.append(f"Line {index}: ledger name is empty.")
+        if d < 0 or c < 0:
+            problems.append(f"Line {index}: amounts must not be negative.")
+        if (d > 0) == (c > 0):
+            problems.append(f"Line {index}: enter either a debit or a credit amount.")
+        debit += d
+        credit += c
+    if len(entries) < 2:
+        problems.append("A voucher needs at least two ledger lines.")
+    if abs(debit - credit) > tolerance:
+        problems.append(
+            f"Voucher does not balance: debit {debit:,.2f} vs credit {credit:,.2f}."
+        )
+    return problems
+
+
+def build_accounting_voucher_xml(payload: AccountingVoucherPayload) -> str:
+    problems = check_balanced(payload.entries)
+    if problems:
+        raise TallyError("; ".join(problems))
+    lines = []
+    for entry in payload.entries:
+        d = round(float(entry.get("debit") or 0), 2)
+        c = round(float(entry.get("credit") or 0), 2)
+        is_debit = d > 0
+        value = d if is_debit else c
+        bill = ""
+        if entry.get("bill_ref"):
+            bill = f"""
+              <BILLALLOCATIONS.LIST>
+                <NAME>{x(entry.get('bill_ref'))}</NAME>
+                <BILLTYPE>{x(entry.get('bill_type') or 'Agst Ref')}</BILLTYPE>
+                <AMOUNT>{'-' if is_debit else ''}{amount(value)}</AMOUNT>
+              </BILLALLOCATIONS.LIST>"""
+        lines.append(f"""
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>{x(entry.get('ledger'))}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>{'Yes' if is_debit else 'No'}</ISDEEMEDPOSITIVE>
+              <AMOUNT>{'-' if is_debit else ''}{amount(value)}</AMOUNT>{bill}
+            </ALLLEDGERENTRIES.LIST>""")
+    remote_id = payload.reference_id or str(uuid.uuid4())
+    date_value = tally_date(payload.voucher_date)
+    party = (
+        f"\n            <PARTYLEDGERNAME>{x(payload.party_ledger)}</PARTYLEDGERNAME>"
+        if payload.party_ledger else ""
+    )
+    return f"""<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Vouchers</REPORTNAME>
+        <STATICVARIABLES>
+          <SVCURRENTCOMPANY>{x(payload.company_name)}</SVCURRENTCOMPANY>
+        </STATICVARIABLES>
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <VOUCHER VCHTYPE="{x(payload.voucher_type)}" ACTION="Create" REMOTEID="{x(remote_id)}">
+            <DATE>{date_value}</DATE>
+            <EFFECTIVEDATE>{date_value}</EFFECTIVEDATE>
+            <VOUCHERTYPENAME>{x(payload.voucher_type)}</VOUCHERTYPENAME>
+            <VOUCHERNUMBER>{x(payload.voucher_number)}</VOUCHERNUMBER>
+            <REFERENCE>{x(payload.voucher_number)}</REFERENCE>{party}
+            <NARRATION>{x(payload.narration)}</NARRATION>
+            <ISINVOICE>No</ISINVOICE>{''.join(lines)}
+          </VOUCHER>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>"""
+
+
+def build_unit_xml(company_name: str, symbol: str) -> str:
+    return f"""<ENVELOPE>
+  <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>All Masters</REPORTNAME>
+        <STATICVARIABLES>
+          <SVCURRENTCOMPANY>{x(company_name)}</SVCURRENTCOMPANY>
+        </STATICVARIABLES>
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <UNIT NAME="{x(symbol)}" ACTION="Create">
+            <NAME>{x(symbol)}</NAME>
+            <ISSIMPLEUNIT>Yes</ISSIMPLEUNIT>
+            <DECIMALPLACES>2</DECIMALPLACES>
+          </UNIT>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>"""
+
+
+def voucher_label(payload) -> str:
+    if isinstance(payload, AccountingVoucherPayload):
+        return payload.voucher_type or "Journal"
+    if isinstance(payload, LedgerVoucherPayload):
+        return "Payment" if payload.direction == "payment" else "Receipt"
+    return "Sales" if payload.transaction_kind == "sales" else "Purchase"
+
+
+def required_masters(payload) -> Dict[str, list]:
+    """Every ledger (with the Tally group it belongs under), stock item and
+    unit a voucher refers to. Used to auto-create what is missing."""
+    ledgers: Dict[str, str] = {}
+    stock: List[dict] = []
+    units: List[str] = []
+    if isinstance(payload, AccountingVoucherPayload):
+        for entry in payload.entries:
+            if entry.get("ledger"):
+                ledgers.setdefault(entry["ledger"], entry.get("group") or "Suspense A/c")
+    elif isinstance(payload, LedgerVoucherPayload):
+        ledgers[payload.bank_ledger] = "Bank Accounts"
+        ledgers[payload.party_ledger] = (
+            "Sundry Creditors" if payload.direction == "payment" else "Sundry Debtors"
+        )
+    else:
+        sales = payload.transaction_kind == "sales"
+        ledgers[payload.supplier_ledger] = getattr(payload, "party_group", "") or (
+            "Sundry Debtors" if sales else "Sundry Creditors"
+        )
+        ledgers[payload.purchase_ledger] = "Sales Accounts" if sales else "Purchase Accounts"
+        for tax in payload.tax_lines:
+            if tax.get("ledger") and abs(float(tax.get("amount") or 0)) >= 0.005:
+                ledgers.setdefault(tax["ledger"], tax.get("group") or "Duties & Taxes")
+        if payload.round_off_ledger and abs(payload.round_off_amount) >= 0.005:
+            ledgers.setdefault(payload.round_off_ledger, "Indirect Expenses")
+        for item in payload.items:
+            if item.get("stock_item"):
+                stock.append(item)
+            if item.get("unit") and item["unit"] not in units:
+                units.append(item["unit"])
+    ledgers.pop("", None)
+    return {"ledgers": [{"name": k, "group": v} for k, v in ledgers.items()],
+            "stock_items": stock, "units": units}
+
 def build_xml_for_payload(payload) -> str:
     """Single entry point every connector uses: picks the right builder for
     whichever payload type it was handed."""
+    if isinstance(payload, AccountingVoucherPayload):
+        return build_accounting_voucher_xml(payload)
     if isinstance(payload, LedgerVoucherPayload):
         return build_ledger_voucher_xml(payload)
     return build_voucher_xml(payload)
@@ -672,6 +867,58 @@ class TallyConnector(abc.ABC):
     def create_ledger(self, name: str, group: str, gstin: str = "") -> TallyResult:
         raise NotImplementedError
 
+    def create_unit(self, symbol: str) -> TallyResult:
+        return TallyResult(False, f"This connector cannot create unit '{symbol}'.")
+
+    def ensure_masters(self, payload) -> Dict[str, List[str]]:
+        """Create every ledger, unit and stock item the voucher needs that
+        does not exist in Tally yet (the customer build's "auto-create"
+        behaviour). Returns {"created": [...], "failed": [...]}. Only runs
+        when the connector can list masters — otherwise nothing is created
+        and preflight reports what is missing.
+        """
+        created: List[str] = []
+        failed: List[str] = []
+        needs = required_masters(payload)
+        try:
+            existing_ledgers = {l.lower() for l in self.list_ledgers()}
+            existing_units = {u.lower() for u in self.list_units()}
+            existing_stock = {i.lower() for i in self.list_stock_items()}
+        except TallyError as exc:
+            return {"created": [], "failed": [f"Could not read Tally masters: {exc}"]}
+        if existing_ledgers:
+            for ledger in needs["ledgers"]:
+                if ledger["name"].lower() in existing_ledgers:
+                    continue
+                result = self.create_ledger(ledger["name"], ledger["group"])
+                (created if result.success else failed).append(
+                    f"Ledger '{ledger['name']}' under {ledger['group']}"
+                    + ("" if result.success else f": {result.message}")
+                )
+        if existing_units:
+            for unit in needs["units"]:
+                if unit.lower() in existing_units:
+                    continue
+                result = self.create_unit(unit)
+                (created if result.success else failed).append(
+                    f"Unit '{unit}'" + ("" if result.success else f": {result.message}")
+                )
+        if existing_stock:
+            for item in needs["stock_items"]:
+                name = item.get("stock_item") or ""
+                if name.lower() in existing_stock:
+                    continue
+                result = self.create_stock_item(
+                    name, item.get("unit") or "PCS", item.get("hsn") or "",
+                    float(item.get("gst_rate") or 0.0),
+                    getattr(payload, "stock_group", "") or "Primary",
+                )
+                existing_stock.add(name.lower())
+                (created if result.success else failed).append(
+                    f"Stock item '{name}'" + ("" if result.success else f": {result.message}")
+                )
+        return {"created": created, "failed": failed}
+
     # -- shared -----------------------------------------------------------
     def export_xml(self, payload: VoucherPayload, directory: Optional[Path] = None) -> str:
         """Always-available fallback: write an importable XML file."""
@@ -703,6 +950,18 @@ class TallyConnector(abc.ABC):
                 )
             ledgers = {l.lower() for l in self.list_ledgers()}
 
+            if isinstance(payload, AccountingVoucherPayload):
+                problems.extend(check_balanced(payload.entries))
+                if ledgers:
+                    for entry in payload.entries:
+                        ledger = entry.get("ledger") or ""
+                        if ledger and ledger.lower() not in ledgers:
+                            problems.append(f"Ledger '{ledger}' does not exist in Tally.")
+                voucher_types = {v.lower() for v in self.list_voucher_types()}
+                if voucher_types and payload.voucher_type.lower() not in voucher_types:
+                    problems.append(f"Voucher type '{payload.voucher_type}' does not exist in Tally.")
+                return list(dict.fromkeys(problems))
+
             if isinstance(payload, LedgerVoucherPayload):
                 if ledgers:
                     party_label = "Customer/expense ledger" if payload.direction == "payment" else "Party ledger"
@@ -733,7 +992,8 @@ class TallyConnector(abc.ABC):
                         and abs(float(tax.get("amount") or 0)) >= 0.005
                         and ledger.lower() not in ledgers
                     ):
-                        problems.append(f"Tax ledger '{ledger}' does not exist in Tally.")
+                        label = "Charges ledger" if tax.get("kind") == "charge" else "Tax ledger"
+                        problems.append(f"{label} '{ledger}' does not exist in Tally.")
                 if (
                     payload.round_off_ledger
                     and abs(payload.round_off_amount) >= 0.005
@@ -885,10 +1145,7 @@ class TallyXMLConnector(TallyConnector):
                 response_xml=response[:8000],
                 errors=stats["errors"] or 1,
             )
-        if isinstance(payload, LedgerVoucherPayload):
-            kind_label = "Payment" if payload.direction == "payment" else "Receipt"
-        else:
-            kind_label = "Sales" if payload.transaction_kind == "sales" else "Purchase"
+        kind_label = voucher_label(payload)
         return TallyResult(
             True,
             f"{kind_label} voucher created in Tally ({stats['created']} voucher).",
@@ -919,6 +1176,17 @@ class TallyXMLConnector(TallyConnector):
             request_xml=xml_body,
             response_xml=response[:4000],
         )
+
+    def create_unit(self, symbol):
+        xml_body = build_unit_xml(self.company_name, symbol)
+        if self.test_mode:
+            return TallyResult(True, f"TEST MODE — would create unit '{symbol}'.",
+                               mode="TEST_MODE", request_xml=xml_body)
+        response = self._send(xml_body)
+        stats = parse_import_response(response)
+        ok = stats["created"] > 0 or stats["altered"] > 0
+        return TallyResult(ok, f"Unit '{symbol}' " + ("created." if ok else "was not created."),
+                           mode="LIVE", request_xml=xml_body, response_xml=response[:4000])
 
     def create_ledger(self, name, group, gstin=""):
         xml_body = build_ledger_xml(self.company_name, name, group, gstin)
@@ -961,12 +1229,20 @@ class MockTallyConnector(TallyConnector):
     ]
     STOCK_ITEMS = ["Parle-G Gold Biscuit 800 gm", "Tata Salt 1 kg", "Amul Butter 500 gm"]
     UNITS = ["PCS", "KG", "BOX", "LTR", "GM", "CTN"]
-    VOUCHER_TYPES = ["Purchase", "Sales", "Payment", "Receipt", "Journal"]
+    VOUCHER_TYPES = [
+        "Purchase", "Sales", "Payment", "Receipt", "Journal",
+        "Contra", "Debit Note", "Credit Note",
+    ]
 
     def __init__(self, config: Optional[Dict] = None):
         super().__init__(config)
         self.company_name = self.company_name or self.COMPANIES[0]
         self._posted: List[str] = []
+        # per-instance copies: masters "created" on one mock connector must
+        # not leak into the next one
+        self.LEDGERS = list(type(self).LEDGERS)
+        self.STOCK_ITEMS = list(type(self).STOCK_ITEMS)
+        self.UNITS = list(type(self).UNITS)
 
     def test_connection(self) -> TallyResult:
         return TallyResult(
@@ -1011,6 +1287,10 @@ class MockTallyConnector(TallyConnector):
     def create_stock_item(self, name, unit, hsn="", gst_rate=0.0, stock_group="Primary"):
         self.STOCK_ITEMS.append(name)
         return TallyResult(True, f"MOCK: stock item '{name}' registered.", mode="MOCK")
+
+    def create_unit(self, symbol):
+        self.UNITS.append(symbol)
+        return TallyResult(True, f"MOCK: unit '{symbol}' registered.", mode="MOCK")
 
     def create_ledger(self, name, group, gstin=""):
         self.LEDGERS.append(name)
@@ -1111,6 +1391,13 @@ class ExcelConnector(TallyConnector):
         return []
 
     def post_voucher(self, payload) -> TallyResult:
+        if isinstance(payload, AccountingVoucherPayload):
+            return TallyResult(
+                False,
+                f"{payload.voucher_type} vouchers cannot be saved to Excel. "
+                "Use 'Export XML' or a live Tally connection instead.",
+                mode="EXCEL",
+            )
         if isinstance(payload, LedgerVoucherPayload):
             from services.excel_export import append_bank_ledger_row
 

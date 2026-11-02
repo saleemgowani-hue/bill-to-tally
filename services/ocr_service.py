@@ -42,6 +42,12 @@ class OCRError(RuntimeError):
     """Raised when an OCR/vision provider cannot produce a usable result."""
 
 
+class OCRConfigError(OCRError):
+    """A failure that retrying cannot fix: missing/invalid API key, usage
+    limit reached, no network route configured. The parser stops retrying
+    straight away and goes to the offline fallback engine (if any)."""
+
+
 @dataclass
 class OCRResponse:
     provider: str
@@ -52,6 +58,9 @@ class OCRResponse:
     attempts: int = 1
     raw_response: str = ""
     warnings: List[str] = field(default_factory=list)
+    # Token usage reported by a hosted AI engine, e.g.
+    # {"prompt_tokens": 1200, "output_tokens": 800, "total_tokens": 2000}
+    usage: Dict = field(default_factory=dict)
 
 
 # --------------------------------------------------------------------------
@@ -920,7 +929,7 @@ class GeminiVisionProvider(_HTTPVisionProvider):
             resp = _post_with_retry(
                 requests,
                 url,
-                params={"key": key},
+                headers={"x-goog-api-key": key},
                 json=payload,
                 timeout=settings.OCR_TIMEOUT_SECONDS,
             )
@@ -1165,6 +1174,15 @@ PROVIDER_LABELS = {
 }
 
 
+def _register_universal() -> None:
+    # Imported late: gemini_engine itself imports from this module.
+    from services.gemini_engine import GeminiUniversalProvider
+    PROVIDER_REGISTRY["universal"] = GeminiUniversalProvider
+    PROVIDER_LABELS["universal"] = (
+        "Universal AI — Gemini, all document types, offline fallback (recommended)"
+    )
+
+
 def register_provider(name: str, cls: Type[OCRProvider]) -> None:
     """Public hook so a customer-specific OCR engine can be plugged in."""
     PROVIDER_REGISTRY[name.lower()] = cls
@@ -1181,3 +1199,12 @@ def get_provider(name: Optional[str] = None, config: Optional[Dict] = None) -> O
 
 def available_providers() -> List[str]:
     return list(PROVIDER_REGISTRY.keys())
+
+
+# Register the Universal (Gemini) engine. At this point every name
+# gemini_engine imports from this module already exists. If gemini_engine
+# is the module being imported first, it registers itself at its own end.
+try:
+    _register_universal()
+except ImportError:  # pragma: no cover - circular first-import order
+    pass

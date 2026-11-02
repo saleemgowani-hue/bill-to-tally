@@ -18,7 +18,13 @@ from typing import Any, Dict, List, Optional
 
 from PIL import Image
 
-from services.ocr_service import OCRError, OCRProvider, OCRResponse, get_provider
+from services.ocr_service import (
+    OCRConfigError,
+    OCRError,
+    OCRProvider,
+    OCRResponse,
+    get_provider,
+)
 from utils.logging import get_logger
 
 log = get_logger("parser")
@@ -119,6 +125,7 @@ class ParsedInvoice:
     attempts: int = 1
     duration_ms: int = 0
     warnings: List[str] = field(default_factory=list)
+    fallback_used: bool = False
 
     @property
     def items(self) -> List[dict]:
@@ -461,6 +468,8 @@ def normalize_invoice(data: dict) -> dict:
         out["cess_total"] = round(sum(i["cess"] for i in items), 2)
     if out["subtotal"] == 0 and items:
         out["subtotal"] = round(sum(i["taxable_value"] for i in items), 2)
+    if isinstance(data.get("universal"), dict):
+        out["universal"] = data["universal"]
     return out
 
 
@@ -731,26 +740,72 @@ def parse_text_heuristic(text: str) -> dict:
 class InvoiceParser:
     """Provider-agnostic invoice extraction with retry + repair."""
 
-    def __init__(self, provider: Optional[OCRProvider] = None, max_attempts: int = 2):
+    def __init__(
+        self,
+        provider: Optional[OCRProvider] = None,
+        max_attempts: int = 2,
+        fallback: Optional[OCRProvider] = None,
+        our_company: str = "",
+    ):
         self.provider = provider or get_provider()
         self.max_attempts = max(1, max_attempts)
+        # Offline engine used when the AI engine cannot be reached (no
+        # internet, bad key, quota). Only ever a text-OCR engine, so its
+        # result always carries "verify every line" warnings.
+        self.fallback = fallback
+        self.our_company = our_company
 
     def parse_images(
         self, images: List[Image.Image], document_type: str = "purchase"
     ) -> ParsedInvoice:
         if not images:
             raise ParseError("No page images supplied.")
-        if self.provider.supports_structured:
+        if not self.provider.supports_structured:
+            return self._parse_via_text(images)
+        try:
             return self._parse_structured(images, document_type)
-        return self._parse_via_text(images)
+        except ParseError as exc:
+            if self.fallback is None:
+                raise
+            log.warning("AI engine failed, using offline fallback: %s", exc)
+            try:
+                parsed = self._parse_via_text(images, provider=self.fallback)
+            except Exception as fb_exc:
+                raise ParseError(
+                    f"{exc}\nOffline fallback ({self.fallback.name}) also failed: {fb_exc}"
+                ) from fb_exc
+            parsed.warnings.insert(
+                0,
+                f"AI engine unavailable ({str(exc)[:300]}). Read with the offline "
+                f"{self.fallback.name} engine instead — check every line carefully.",
+            )
+            parsed.fallback_used = True
+            return parsed
 
     # -- structured (vision LLM) path ------------------------------------
     def _parse_structured(
         self, images: List[Image.Image], document_type: str = "purchase"
     ) -> ParsedInvoice:
-        prompt = (
-            SALES_EXTRACTION_PROMPT if document_type == "sales" else EXTRACTION_PROMPT
-        )
+        universal = bool(getattr(self.provider, "uses_universal_schema", False))
+        our_side = "seller" if document_type == "sales" else "buyer"
+        if universal:
+            from services.gemini_engine import universal_prompt
+            from services.universal_schema import UNIVERSAL_SCHEMA_HINT
+            prompt = universal_prompt(self.our_company, document_type)
+            schema_hint = UNIVERSAL_SCHEMA_HINT
+        else:
+            prompt = (
+                SALES_EXTRACTION_PROMPT if document_type == "sales" else EXTRACTION_PROMPT
+            )
+            schema_hint = SCHEMA_HINT
+
+        def _normalize(raw: dict) -> dict:
+            if not universal:
+                return normalize_invoice(raw)
+            from services.universal_schema import extract_extras, to_legacy_shape
+            data = normalize_invoice(to_legacy_shape(raw, our_side))
+            data["universal"] = extract_extras(raw, our_side)
+            return data
         warnings: List[str] = []
         last_error: Optional[Exception] = None
         response: Optional[OCRResponse] = None
@@ -759,11 +814,11 @@ class InvoiceParser:
         for attempt in range(1, self.max_attempts + 1):
             try:
                 response = self.provider.extract_structured(
-                    images, prompt, SCHEMA_HINT
+                    images, prompt, schema_hint
                 )
                 warnings.extend(response.warnings)
                 if response.structured is not None:
-                    data = normalize_invoice(response.structured)
+                    data = _normalize(response.structured)
                     return ParsedInvoice(
                         data=data,
                         provider=self.provider.name,
@@ -776,7 +831,7 @@ class InvoiceParser:
                     )
                 data = loads_strict(response.raw_response)
                 return ParsedInvoice(
-                    data=normalize_invoice(data),
+                    data=_normalize(data),
                     provider=self.provider.name,
                     model=response.model,
                     raw_json=response.raw_response,
@@ -794,7 +849,7 @@ class InvoiceParser:
                     fixed = self._ask_for_repair(response.raw_response)
                     if fixed is not None:
                         return ParsedInvoice(
-                            data=normalize_invoice(fixed),
+                            data=_normalize(fixed),
                             provider=self.provider.name,
                             model=response.model,
                             raw_json=response.raw_response,
@@ -804,6 +859,11 @@ class InvoiceParser:
                             warnings=warnings
                             + ["Model output was repaired before use."],
                         )
+            except OCRConfigError as exc:
+                # retrying cannot fix a missing key / quota / bad model
+                last_error = exc
+                warnings.append(str(exc))
+                break
             except OCRError as exc:
                 last_error = exc
                 warnings.append(f"Attempt {attempt}: {exc}")
@@ -825,8 +885,11 @@ class InvoiceParser:
             return None
 
     # -- text OCR path ---------------------------------------------------
-    def _parse_via_text(self, images: List[Image.Image]) -> ParsedInvoice:
-        response = self.provider.extract_text(images)
+    def _parse_via_text(
+        self, images: List[Image.Image], provider: Optional[OCRProvider] = None
+    ) -> ParsedInvoice:
+        provider = provider or self.provider
+        response = provider.extract_text(images)
         data = parse_text_heuristic(response.text)
         warnings = list(response.warnings)
         warnings.append(
@@ -837,7 +900,7 @@ class InvoiceParser:
             warnings.append("No line items could be identified from the OCR text.")
         return ParsedInvoice(
             data=normalize_invoice(data),
-            provider=self.provider.name,
+            provider=provider.name,
             model=response.model,
             raw_text=response.text,
             attempts=1,

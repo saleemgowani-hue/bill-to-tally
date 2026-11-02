@@ -247,7 +247,10 @@ class TestPostingAndStock:
         invoice, items = self._confirmed(session, company, user)
         product = session.query(Product).filter(Product.id == items[0].product_id).one()
         before = product.current_stock
-        # the mock connector knows nothing about these ledgers/items
+        # the mock connector knows nothing about these ledgers/items, and
+        # auto-creation of missing masters is switched off for this company
+        from database.database import set_setting
+        set_setting(session, company.id, "auto_create_masters", "0")
         result, transaction = post_to_tally(
             session, company, user, invoice, MockTallyConnector(), run_preflight=True
         )
@@ -256,6 +259,21 @@ class TestPostingAndStock:
         session.refresh(product)
         assert product.current_stock == before
         assert invoice.status == InvoiceStatus.FAILED.value
+
+    def test_missing_masters_are_auto_created_then_posted(self, session, company, user):
+        invoice, items = self._confirmed(session, company, user)
+        connector = MockTallyConnector()
+        result, transaction = post_to_tally(
+            session, company, user, invoice, connector, run_preflight=True
+        )
+        assert result.success, result.message
+        assert transaction is not None
+        from database.models import AuditLog
+        created = session.query(AuditLog).filter(
+            AuditLog.company_id == company.id,
+            AuditLog.action == "TALLY_MASTERS_AUTO_CREATED",
+        ).all()
+        assert created and "Created in Tally" in created[-1].detail
 
 
 class TestIdempotencyKey:

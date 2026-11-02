@@ -59,6 +59,9 @@ def _build_provider(db, company):
     neither should have to think about the other when changing its own
     provider wiring."""
     provider_name = get_setting(db, company.id, "ocr_provider", settings.OCR_PROVIDER)
+    if provider_name == "universal":
+        from services import api_manager
+        return api_manager.universal_provider(db, company), provider_name
     config = {}
     key_setting = PROVIDER_KEY_SETTING.get(provider_name)
     if key_setting:
