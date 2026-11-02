@@ -86,3 +86,28 @@ def test_purchase_post_applies_and_advances_series(session, company, user):
     assert "<VOUCHERNUMBER>PUR-900</VOUCHERNUMBER>" in result.request_xml
     assert "Voucher no. PUR-900" in result.message
     assert vn.get_config(session, company.id, "purchase").next_number == 901
+
+
+def test_every_ledger_used_in_vouchers_is_editable_mapping(session, company):
+    from database.database import all_mappings, seed_tally_mappings
+    seed_tally_mappings(session, company.id)
+    keys = set(all_mappings(session, company.id))
+    for key in ("freight_ledger", "sales_freight_ledger", "sales_ledger", "sales_cgst_ledger",
+                "bank_payment_voucher_type", "customer_ledger_group", "round_off_ledger"):
+        assert key in keys
+
+
+def test_purchase_and_sales_freight_use_their_own_ledgers(session, company):
+    from types import SimpleNamespace
+    from database.database import seed_tally_mappings
+    from database.models import TallyMapping
+    from services.universal_persist import charge_ledger_lines
+
+    seed_tally_mappings(session, company.id)
+    row = session.query(TallyMapping).filter_by(company_id=company.id,
+                                                mapping_key="sales_freight_ledger").one()
+    row.mapping_value = "Cartage Recovered"
+    session.commit()
+    bill = SimpleNamespace(freight=50.0, packing_charges=0.0, other_charges=0.0)
+    assert charge_ledger_lines(session, company.id, bill, "purchase")[0]["ledger"] == "Freight Inward"
+    assert charge_ledger_lines(session, company.id, bill, "sales")[0]["ledger"] == "Cartage Recovered"

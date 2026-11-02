@@ -46,6 +46,24 @@ DEFAULT_TALLY_MAPPINGS = [
     ("default_unit", "PCS", "Unit used when a new stock item is created"),
     ("supplier_ledger_group", "Sundry Creditors", "Group for auto-created suppliers"),
     ("stock_group", "Primary", "Stock group for auto-created stock items"),
+    # Purchase: charges printed below the item table
+    ("freight_ledger", "Freight Inward", "Purchase: freight / cartage / transport on the bill"),
+    ("packing_ledger", "Packing Charges", "Purchase: packing & forwarding charges"),
+    ("other_charges_ledger", "Other Charges", "Purchase: loading, insurance & other charges"),
+    # Sales
+    ("sales_voucher_type", "Sales", "Tally voucher type name for sales"),
+    ("sales_ledger", "Sales Account", "Ledger the sale value is credited to"),
+    ("sales_cgst_ledger", "CGST Output", "Output CGST ledger"),
+    ("sales_sgst_ledger", "SGST Output", "Output SGST ledger"),
+    ("sales_igst_ledger", "IGST Output", "Output IGST ledger"),
+    ("sales_cess_ledger", "CESS Output", "Output Cess ledger"),
+    ("sales_freight_ledger", "Freight Outward", "Sales: freight charged to the customer"),
+    ("sales_packing_ledger", "Packing Charges Recovered", "Sales: packing charged to the customer"),
+    ("sales_other_charges_ledger", "Other Charges Recovered", "Sales: other charges on the bill"),
+    ("customer_ledger_group", "Sundry Debtors", "Group for auto-created customers"),
+    # Bank
+    ("bank_payment_voucher_type", "Payment", "Voucher type for money paid from the bank"),
+    ("bank_receipt_voucher_type", "Receipt", "Voucher type for money received in the bank"),
 ]
 
 

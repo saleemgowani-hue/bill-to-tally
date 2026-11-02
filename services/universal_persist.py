@@ -19,11 +19,14 @@ from services.invoice_validator import (
 
 CHARGE_FIELDS = ("freight", "packing_charges", "other_charges")
 
-# mapping key, default ledger name (purchase), default ledger name (sales)
+# (purchase mapping key, default) , (sales mapping key, default)
 CHARGE_LEDGERS = {
-    "freight": ("freight_ledger", "Freight Inward", "Freight Outward"),
-    "packing_charges": ("packing_ledger", "Packing Charges", "Packing Charges Recovered"),
-    "other_charges": ("other_charges_ledger", "Other Charges", "Other Charges Recovered"),
+    "freight": (("freight_ledger", "Freight Inward"),
+                ("sales_freight_ledger", "Freight Outward")),
+    "packing_charges": (("packing_ledger", "Packing Charges"),
+                        ("sales_packing_ledger", "Packing Charges Recovered")),
+    "other_charges": (("other_charges_ledger", "Other Charges"),
+                      ("sales_other_charges_ledger", "Other Charges Recovered")),
 }
 
 
@@ -67,8 +70,8 @@ def charge_ledger_lines(session, company_id: int, invoice, kind: str = "purchase
         value = round(float(getattr(invoice, name, 0) or 0), 2)
         if abs(value) < 0.005:
             continue
-        key, purchase_default, sales_default = CHARGE_LEDGERS[name]
-        default = sales_default if kind == "sales" else purchase_default
+        purchase_side, sales_side = CHARGE_LEDGERS[name]
+        key, default = sales_side if kind == "sales" else purchase_side
         lines.append({
             "ledger": get_mapping(session, company_id, key, default) or default,
             "amount": value,

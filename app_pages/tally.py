@@ -145,10 +145,91 @@ def _connection_tab(db, company, user, mode, is_test):
                 pass
 
 
+MAPPING_SECTIONS = [
+    ("Purchase / खरीद", [
+        "voucher_type", "purchase_ledger", "cgst_ledger", "sgst_ledger", "igst_ledger",
+        "cess_ledger", "freight_ledger", "packing_ledger", "other_charges_ledger",
+        "discount_ledger",
+    ]),
+    ("Sales / बिक्री", [
+        "sales_voucher_type", "sales_ledger", "sales_cgst_ledger", "sales_sgst_ledger",
+        "sales_igst_ledger", "sales_cess_ledger", "sales_freight_ledger",
+        "sales_packing_ledger", "sales_other_charges_ledger",
+    ]),
+    ("Bank / बैंक", ["bank_payment_voucher_type", "bank_receipt_voucher_type"]),
+    ("Common / सामान्य", [
+        "round_off_ledger", "supplier_ledger_group", "customer_ledger_group",
+        "stock_group", "default_godown", "default_unit",
+    ]),
+]
+
+
+def _mapping_input(row, current, ledgers):
+    col1, col2 = st.columns([1.2, 2])
+    col1.markdown(
+        f"**{row.description or row.mapping_key}**  \n<span class='muted'>{row.mapping_key}</span>",
+        unsafe_allow_html=True,
+    )
+    if ledgers and row.mapping_key.endswith("_ledger"):
+        choices = [current] + [l for l in ledgers if l != current] if current else list(ledgers)
+        return col2.selectbox(row.mapping_key, choices, key=f"map_{row.id}",
+                              label_visibility="collapsed")
+    return col2.text_input(row.mapping_key, current, key=f"map_{row.id}",
+                           label_visibility="collapsed")
+
+
+def _party_ledgers_section(db, company, user, ledgers):
+    """Customers and bank accounts -> Tally ledger, editable here."""
+    from database.models import BankAccount, Customer
+
+    st.divider()
+    st.markdown("#### Customers & bank accounts / ग्राहक और बैंक खाते")
+    st.caption("Leave 'Tally ledger' empty to use the name itself. Suppliers are edited "
+               "on the Suppliers page, products on the Products page.")
+    col_a, col_b = st.columns(2)
+    for col, model, title, label in (
+        (col_a, Customer, "Customers → Tally ledgers", "Customer"),
+        (col_b, BankAccount, "Bank accounts → Tally ledgers", "Bank account"),
+    ):
+        with col:
+            st.markdown(f"**{title}**")
+            records = (db.query(model).filter(model.company_id == company.id)
+                       .order_by(model.name).limit(300).all())
+            if not records:
+                st.caption(f"No {label.lower()}s yet.")
+                continue
+            frame = pd.DataFrame([{"id": r.id, label: r.name,
+                                   "Tally ledger": r.tally_ledger_name or ""} for r in records])
+            edited = st.data_editor(
+                frame, key=f"edit_{model.__tablename__}", hide_index=True, width="stretch",
+                disabled=["id", label] if user.is_admin else True,
+                column_config={"id": None}, height=260,
+            )
+            if user.is_admin and st.button(f"Save {label.lower()} ledgers",
+                                           key=f"save_{model.__tablename__}"):
+                by_id = {r.id: r for r in records}
+                changed = []
+                for _, row in edited.iterrows():
+                    record = by_id.get(int(row["id"]))
+                    value = (row["Tally ledger"] or "").strip() or None
+                    if record is not None and (record.tally_ledger_name or None) != value:
+                        changed.append(f"{record.name} -> {value or record.name}")
+                        record.tally_ledger_name = value
+                db.commit()
+                if changed:
+                    audit_service.record(db, company.id, "TALLY_MAPPING_SAVED",
+                                         "; ".join(changed)[:4000], user=user)
+                st.success(f"Saved {len(changed)} change(s).")
+
+
 def _mapping_tab(db, company, user, connector):
+    st.markdown(
+        "**Kaun si entry kis ledger mein jaayegi** — choose the Tally ledger for every "
+        "part of a voucher. These names go into the voucher exactly as written."
+    )
     st.caption(
-        "Nothing is hard-coded. These names are used verbatim in the voucher XML, "
-        "so they must match your Tally ledgers exactly."
+        "If a name here does not exist in Tally yet and auto-create is on (API Settings → "
+        "Options), it is created before posting; otherwise posting stops and tells you."
     )
     try:
         ledgers = connector.list_ledgers()
@@ -168,37 +249,41 @@ def _mapping_tab(db, company, user, connector):
         .all()
     )
 
+    by_key = {row.mapping_key: row for row in rows}
     updates = {}
-    for row in rows:
-        col1, col2 = st.columns([1.2, 2])
-        col1.markdown(f"**{row.mapping_key}**  \n<span class='muted'>{row.description or ''}</span>",
-                      unsafe_allow_html=True)
-        current = mappings.get(row.mapping_key, "")
-        if ledgers and row.mapping_key.endswith("_ledger"):
-            choices = [current] + [l for l in ledgers if l != current] if current else ledgers
-            updates[row.mapping_key] = col2.selectbox(
-                row.mapping_key, choices, key=f"map_{row.id}", label_visibility="collapsed"
-            )
-        else:
-            updates[row.mapping_key] = col2.text_input(
-                row.mapping_key, current, key=f"map_{row.id}", label_visibility="collapsed"
-            )
+    shown = set()
+    for title, keys in MAPPING_SECTIONS:
+        present = [k for k in keys if k in by_key]
+        if not present:
+            continue
+        st.markdown(f"#### {title}")
+        for key in present:
+            shown.add(key)
+            updates[key] = _mapping_input(by_key[key], mappings.get(key, ""), ledgers)
+    leftover = [r for r in rows if r.mapping_key not in shown]
+    if leftover:
+        st.markdown("#### Other / अन्य")
+        for row in leftover:
+            updates[row.mapping_key] = _mapping_input(row, mappings.get(row.mapping_key, ""), ledgers)
 
-    if st.button("Save mapping", type="primary"):
-        changed = 0
+    if st.button("💾 Save mapping / सेव करें", type="primary", disabled=not user.is_admin):
+        changed = []
         for row in rows:
-            value = updates.get(row.mapping_key, "")
+            value = (updates.get(row.mapping_key, "") or "").strip()
             if (row.mapping_value or "") != value:
+                changed.append(f"{row.mapping_key}: '{row.mapping_value or ''}' -> '{value}'")
                 row.mapping_value = value
-                changed += 1
         db.commit()
         audit_service.record(
-            db, company.id, "TALLY_MAPPING_SAVED", f"{changed} mapping(s) updated", user=user
+            db, company.id, "TALLY_MAPPING_SAVED",
+            (f"{len(changed)} mapping(s) updated: " + "; ".join(changed))[:4000], user=user
         )
-        st.success(f"Saved {changed} change(s).")
+        st.success(f"Saved {len(changed)} change(s).")
+
+    _party_ledgers_section(db, company, user, ledgers)
 
     st.divider()
-    st.markdown("#### Per-record overrides")
+    st.markdown("#### Suppliers & products / सप्लायर और प्रोडक्ट")
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("**Suppliers → Tally ledgers**")
